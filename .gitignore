@@ -218,3 +218,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+attendance-data/
+data/
+output/
+run*/
+crops/
+*.mp4
+*.avi
+*.pt

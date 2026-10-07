@@ -229,4 +229,10 @@ crops/
 *.pt
 models/
 *.db
+*.db-*
+*.sqlite
+*.sqlite3
 *.npz
+*.onnx
+*.mov
+*.mkv

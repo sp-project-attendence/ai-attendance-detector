@@ -1,8 +1,8 @@
 """WP2: video -> YOLO detection -> tracker IDs -> tracks.csv, meta.json, annotated.mp4, one best crop per ID.
 
 Example:
-  python src/track.py --video E:/zsp_project/attendance-data/kids.mp4 --model yolo11n.pt \
-      --imgsz 640 --stride 5 --out E:/zsp_project/attendance-data/run1_byte
+  python src/track.py --video E:/zsp_project/attendance-data/kids.mp4 --model yolo11s.pt \
+      --imgsz 960 --stride 2 --out E:/zsp_project/attendance-data/run1_byte
 """
 import argparse, json, os, subprocess, time
 import cv2
@@ -13,11 +13,11 @@ from ultralytics import YOLO
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--video", required=True)
-    ap.add_argument("--model", default="yolo11n.pt")        # n = fastest, s = better, m = best/slowest
+    ap.add_argument("--model", default="yolo11s.pt")        # balanced speed and small-person recall
     ap.add_argument("--tracker", default="bytetrack.yaml")  # or botsort.yaml
-    ap.add_argument("--imgsz", type=int, default=640)
-    ap.add_argument("--conf", type=float, default=0.25)
-    ap.add_argument("--stride", type=int, default=5)        # process every Nth frame
+    ap.add_argument("--imgsz", type=int, default=960)
+    ap.add_argument("--conf", type=float, default=0.15)
+    ap.add_argument("--stride", type=int, default=2)        # process every Nth frame
     ap.add_argument("--out", default="output")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
@@ -61,7 +61,7 @@ def main():
                         best[tid] = (score, r.orig_img[cy1:cy2, cx1:cx2].copy())
         writer.write(r.plot())
         if i % 20 == 0:
-            print(f"processed {i * a.stride}/{n_frames} frames", end="\r")
+            print(f"processed {i * a.stride}/{n_frames} frames", flush=True)
     writer.release()
     elapsed = time.time() - t0
 
@@ -71,7 +71,7 @@ def main():
     df = pd.DataFrame(rows)
     df.to_csv(os.path.join(a.out, "tracks.csv"), index=False)
     meta = dict(fps=fps, duration=n_frames / fps, step=a.stride / fps,
-                model=a.model, tracker=a.tracker, imgsz=a.imgsz, stride=a.stride,
+                model=a.model, tracker=a.tracker, imgsz=a.imgsz, stride=a.stride, conf=a.conf,
                 run_seconds=round(elapsed, 1))
     json.dump(meta, open(os.path.join(a.out, "meta.json"), "w"), indent=2)
 

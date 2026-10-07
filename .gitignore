@@ -227,3 +227,6 @@ crops/
 *.mp4
 *.avi
 *.pt
+models/
+*.db
+*.npz

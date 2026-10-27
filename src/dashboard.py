@@ -268,7 +268,10 @@ def tone(value):
         return "warning"
     if any(word in text for word in ("match", "seen", "present", "confirmed", "high")):
         return "success"
-    return "neutral"
+    return "neutral"   
+
+
+    
 
 
 def render_reconciliation_table(frame):
@@ -352,63 +355,133 @@ def timeline_chart(timeline, report_row):
     fig = go.Figure()
     for start, end in parsed:
         fig.add_trace(go.Bar(x=[end - start], y=["Visibility"], base=[start], orientation="h",
-            marker_color="#43836d", showlegend=False, hovertemplate=f"Visible evidence: {start:.1f}–{end:.1f}s<extra></extra>"))
+            marker_color="#248461", showlegend=False, hovertemplate=f"Visible evidence: {start:.1f}–{end:.1f}s<extra></extra>"))
     for index in range(len(parsed) - 1):
         start, end = parsed[index][1], parsed[index + 1][0]
         if end > start:
             fig.add_trace(go.Bar(x=[end - start], y=["Gap"], base=[start], orientation="h",
-                marker_color="#d8dee8", showlegend=False, hovertemplate=f"No visibility evidence: {start:.1f}–{end:.1f}s<extra></extra>"))
+                marker_color="#E0E5EB", showlegend=False, hovertemplate=f"No visibility evidence: {start:.1f}–{end:.1f}s<extra></extra>"))
     if not parsed:
         fig.add_annotation(text="No visibility evidence recorded", showarrow=False)
-    fig.update_layout(height=170, barmode="overlay", margin={"l": 12, "r": 12, "t": 12, "b": 38},
-        paper_bgcolor="white", plot_bgcolor="white", font={"color": "#344054", "size": 14},
-        xaxis={"title": "Seconds from video start", "gridcolor": "#edf0f4"}, yaxis={"showticklabels": False})
+    fig.update_layout(height=220, barmode="overlay", margin={"l": 18, "r": 18, "t": 18, "b": 46},
+        paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF",
+        font={"color": "#263448", "size": 14},
+        xaxis={"title": "Seconds from video start", "gridcolor": "#E0E5EB", "zerolinecolor": "#E0E5EB"},
+        yaxis={"showticklabels": False, "gridcolor": "#E0E5EB"})
     return fig
 
 
 def styles():
     st.markdown("""
     <style>
-    .stApp {background:#f4f7fa;color:#172b4d}
-    .block-container {max-width:1720px;padding:1.5rem 2.4rem 3rem}
-    [data-testid="stHeader"] {background:#fff}
+    :root {--bg:#F3F5F7;--sidebar:#354154;--sidebar-secondary:#405069;--sidebar-active:#526178;--card:#FFFFFF;--surface:#FFFFFF;--ink:#263448;--muted:#667386;--line:#E0E5EB;--icon:#71849B;--success:#248461;--warning:#B87526;--danger:#B84757}
+    .stApp {background:var(--bg);color:var(--ink)}
+    [data-testid="stAppViewContainer"] {background:var(--bg)}
+    .block-container {max-width:1500px;padding:1.15rem 2.2rem 3rem}
+    [data-testid="stHeader"] {background:rgba(243,245,247,.96);backdrop-filter:blur(10px)}
     [data-testid="stToolbar"], [data-testid="stDecoration"], #MainMenu, footer {display:none!important}
-    section[data-testid="stSidebar"] {display:none}
-    h1 {font-size:2.15rem!important;color:#17324f;letter-spacing:-.035em;margin:.15rem 0}
-    h2 {font-size:1.45rem!important;color:#17324f;margin-top:1.1rem}
-    h3 {font-size:1.2rem!important;color:#17324f}
-    p, label, [data-testid="stCaptionContainer"] {font-size:1rem}
-    [data-testid="stMetric"] {background:#fff;border:1px solid #dfe6ed;border-radius:14px;padding:17px 19px;min-height:108px;box-shadow:0 2px 8px rgba(21,43,66,.035)}
-    [data-testid="stMetricLabel"] {font-size:1rem;color:#596b7a}
-    [data-testid="stMetricValue"] {font-size:2rem;color:#17324f}
-    [data-baseweb="select"] > div {background:#fff!important;color:#172b4d!important;border-color:#cbd5df!important;min-height:44px}
-    [data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea {background:#fff!important;color:#172b4d!important;border:1px solid #cbd5df!important;min-height:44px}
-    [data-testid="stCheckbox"] label {font-size:1rem!important;color:#344054!important}
-    .session-header {background:#fff;border:1px solid #dfe6ed;border-radius:14px;padding:17px 20px;margin:.35rem 0 1rem;box-shadow:0 2px 8px rgba(21,43,66,.035)}
-    .eyebrow {font-size:.78rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#62788c}
-    .app-brand {display:flex;align-items:center;gap:16px;background:#fff;border:1px solid #e3e9ef;border-radius:16px;padding:20px 24px;margin-bottom:18px;box-shadow:0 3px 12px rgba(21,43,66,.045)}
-    .brand-mark {width:48px;height:48px;display:grid;place-items:center;border-radius:13px;background:#eaf3ef;color:#315f52;font-weight:800;font-size:22px}
-    .app-brand .brand-kicker {color:#62788c;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
-    .app-brand .brand-subtitle {color:#6c7f90;font-size:15px;margin-top:2px}
-    .app-brand .brand-title {color:#17324f;font-size:27px;font-weight:750;letter-spacing:-.03em}
-    .section-card {background:#fff;border:1px solid #e1e8ef;border-radius:14px;padding:20px 22px;margin:12px 0;box-shadow:0 2px 9px rgba(21,43,66,.035)}
-    .teacher-table-wrap {overflow-x:auto;background:#fff;border:1px solid #dfe6ed;border-radius:13px;box-shadow:0 2px 10px rgba(21,43,66,.04);margin:10px 0 18px}
-    .teacher-table {width:100%;border-collapse:collapse;background:#fff;color:#26384a;font-size:14px;min-width:940px}
-    .teacher-table th {background:#f5f8fa;color:#607487;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.065em;font-weight:700;padding:15px 13px;border-bottom:1px solid #dfe6ed;white-space:nowrap}
-    .teacher-table td {padding:14px 13px;border-bottom:1px solid #edf1f4;vertical-align:middle;line-height:1.4}
+    section[data-testid="stSidebar"] {display:block!important;background:var(--sidebar);border-right:1px solid #2E394B;min-width:260px}
+    section[data-testid="stSidebar"] > div {background:var(--sidebar)}
+    section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {padding:1.1rem .85rem}
+    h1 {font-size:2.15rem!important;color:var(--ink);letter-spacing:-.035em;margin:.15rem 0}
+    h2 {font-size:1.35rem!important;color:var(--ink);margin:1.15rem 0 .5rem}
+    h3 {font-size:1.15rem!important;color:var(--ink)}
+    p, label, [data-testid="stCaptionContainer"] {font-size:.94rem;color:var(--muted);line-height:1.5}
+    div[data-testid="stHorizontalBlock"] {gap:1rem;align-items:stretch}
+    div[data-testid="stVerticalBlock"] {gap:.8rem}
+    [data-testid="stMetric"] {position:relative;background:var(--card);border:1px solid var(--line);border-left:3px solid var(--icon);border-radius:12px;padding:13px 16px;min-height:94px;box-shadow:0 3px 10px rgba(38,52,72,.045)}
+    [data-testid="stMetricLabel"] {font-size:.82rem;font-weight:650;line-height:1.3;color:var(--muted);white-space:normal;overflow-wrap:anywhere;min-height:2.25em}
+    [data-testid="stMetricValue"] {font-size:1.55rem;font-weight:720;line-height:1.15;color:var(--ink);overflow-wrap:anywhere}
+    div.st-key-kpi_roster [data-testid="stMetric"],div.st-key-kpi_unknown_tracks [data-testid="stMetric"] {border-left-color:#71849B}
+    div.st-key-kpi_seen [data-testid="stMetric"] {border-left-color:#248461}
+    div.st-key-kpi_not_seen [data-testid="stMetric"] {border-left-color:#B84757}
+    div.st-key-kpi_low_confidence [data-testid="stMetric"],div.st-key-kpi_flags [data-testid="stMetric"] {border-left-color:#B87526}
+    [data-baseweb="select"] > div {background:var(--surface)!important;color:var(--ink)!important;border-color:var(--line)!important;border-radius:9px;min-height:42px}
+    [data-baseweb="popover"],[data-baseweb="menu"],[role="listbox"] {background:var(--surface)!important;color:var(--ink)!important;border-color:var(--line)!important}
+    [role="option"] {background:var(--surface)!important;color:var(--ink)!important}
+    [role="option"]:hover {background:#EEF1F4!important}
+    [data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea {background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--line)!important;border-radius:9px;min-height:42px}
+    [data-testid="stTextInput"] input::placeholder,[data-testid="stTextArea"] textarea::placeholder {color:#7C8796!important}
+    [data-testid="stTextInput"] input:focus,[data-testid="stTextArea"] textarea:focus {border-color:#526178!important;box-shadow:0 0 0 3px rgba(82,97,120,.16)!important}
+    [data-testid="stCheckbox"] label {font-size:.94rem!important;color:var(--muted)!important}
+    [data-testid="stForm"] {background:var(--card);border:1px solid var(--line);border-radius:13px;padding:20px;box-shadow:0 3px 12px rgba(38,52,72,.045)}
+    [data-testid="stAlert"] {margin:.4rem 0 .65rem;background:var(--card);border:1px solid var(--line);border-left:3px solid var(--icon);border-radius:10px;padding:11px 15px;box-shadow:0 2px 8px rgba(38,52,72,.04)}
+    [data-testid="stAlert"][kind="warning"] {border-left-color:var(--warning)}
+    [data-testid="stAlert"][kind="error"] {border-left-color:var(--danger)}
+    [data-testid="stAlert"][kind="success"] {border-left-color:var(--success)}
+    [data-testid="stAlert"] p,[data-testid="stAlert"] [data-testid="stMarkdownContainer"] {color:var(--ink)}
+    .session-header {height:100%;box-sizing:border-box;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin:.15rem 0 .55rem;min-height:88px;box-shadow:0 3px 10px rgba(38,52,72,.04)}
+    .eyebrow {font-size:.73rem;font-weight:750;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+    .sidebar-brand {background:var(--sidebar-secondary);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:15px 14px;margin-bottom:20px}
+    .sidebar-brand-mark {display:grid;place-items:center;width:38px;height:38px;margin-bottom:13px;border-radius:10px;background:var(--sidebar-active);color:#fff;font-weight:800;font-size:18px}
+    section[data-testid="stSidebar"] .sidebar-brand .brand-kicker {color:#F5F7FB;font-size:10px;font-weight:750;letter-spacing:.13em;text-transform:uppercase}
+    .sidebar-brand .brand-title {color:#fff;font-size:17px;line-height:1.25;font-weight:750;letter-spacing:-.02em;margin-top:6px}
+    section[data-testid="stSidebar"] .sidebar-brand .brand-subtitle {color:#E0E7F0;font-size:11px;line-height:1.5;margin-top:8px}
+    section[data-testid="stSidebar"] [data-testid="stRadio"] > [data-testid="stWidgetLabel"] {font-size:10px;font-weight:750;letter-spacing:.12em;color:#FFFFFF!important;text-transform:uppercase;margin:0 0 8px}
+    section[data-testid="stSidebar"] [data-testid="stRadio"] > [data-testid="stWidgetLabel"] p {color:#FFFFFF!important;letter-spacing:.12em}
+    section[data-testid="stSidebar"] [data-testid="stRadio"] > div {gap:5px}
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"] {box-sizing:border-box;width:100%;padding:9px 10px;margin:0;border:1px solid transparent;border-radius:9px;color:#FFFFFF!important;font-weight:700!important;transition:background .15s ease,border-color .15s ease}
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"] p,
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"] span,
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"] svg {color:#FFFFFF!important;fill:#FFFFFF;stroke:#FFFFFF;font-weight:700}
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"] p::first-letter {color:#FFFFFF!important}
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"]:hover {background:var(--sidebar-secondary);border-color:rgba(255,255,255,.12);color:#FFFFFF!important}
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"]:hover p,
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"]:hover span,
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"]:hover svg {color:#FFFFFF!important;fill:#FFFFFF;stroke:#FFFFFF}
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"]:hover p::first-letter {color:#FFFFFF!important}
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"]:has(input:checked) {background:var(--sidebar-active);border-color:rgba(255,255,255,.2);color:#FFFFFF;font-weight:700}
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"]:has(input:checked) p,
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"]:has(input:checked) span,
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"]:has(input:checked) svg {color:#FFFFFF!important;fill:#E0E7F0;stroke:#E0E7F0}
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"]:has(input:checked) p::first-letter {color:#FFFFFF!important}
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"]:focus-within {outline:2px solid #E0E7F0;outline-offset:2px}
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"]:has(input:disabled) {color:#AAB5C4!important;font-weight:500!important;cursor:not-allowed}
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"]:has(input:disabled) p,
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"]:has(input:disabled) span,
+    section[data-testid="stSidebar"] [data-testid="stRadioOption"]:has(input:disabled) svg {color:#AAB5C4!important;fill:#AAB5C4;stroke:#AAB5C4}
+    section[data-testid="stSidebar"] [data-testid="stRadio"] input {accent-color:#fff}
+    section[data-testid="stSidebar"] .sidebar-footer {border-top:1px solid rgba(255,255,255,.16);margin-top:22px;padding-top:12px;color:#FFFFFF;font-size:11px;line-height:1.55}
+    .section-card {background:var(--card);border:1px solid var(--line);border-radius:13px;padding:19px 21px;margin:11px 0;box-shadow:0 3px 12px rgba(38,52,72,.04)}
+    .teacher-table-wrap {overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 3px 12px rgba(38,52,72,.045);margin:11px 0 18px}
+    .teacher-table {width:100%;border-collapse:collapse;background:transparent;color:#263448;font-size:13px;min-width:940px}
+    .teacher-table th {background:#F3F5F7;color:#526178;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.075em;font-weight:750;padding:13px 14px;border-bottom:1px solid #E0E5EB;white-space:nowrap}
+    .teacher-table td {padding:12px 14px;border-bottom:1px solid #E8EBEF;vertical-align:middle;line-height:1.45}
+    .teacher-table tbody tr:nth-child(even) {background:#FAFBFC}
     .teacher-table tbody tr:last-child td {border-bottom:0}
-    .teacher-table tbody tr:hover {background:#f8fbfd}
-    .teacher-table small {display:block;color:#77899a;font-size:12px;margin-top:3px}
-    .teacher-table .status-pill {display:inline-block;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:650;white-space:nowrap}
-    .status-pill.success {background:#e9f4ee;color:#286348}
-    .status-pill.warning {background:#fff4df;color:#946100}
-    .status-pill.danger {background:#fdecec;color:#a23e3e}
-    .status-pill.neutral {background:#eef2f5;color:#53687a}
-    button[kind="primary"] {background:#315f52;border-color:#315f52;min-height:44px;font-size:1rem;border-radius:9px}
-    button[kind="secondary"] {min-height:44px;font-size:1rem;border-radius:9px;border-color:#cbd5df}
-    [data-testid="stTabs"] [role="tablist"] {gap:8px;border-bottom:1px solid #dfe6ed}
-    [data-testid="stTabs"] button[role="tab"] {font-size:15px;font-weight:650;color:#53687a;padding:12px 16px}
-    [data-testid="stTabs"] button[aria-selected="true"] {color:#315f52;border-bottom-color:#315f52}
+    .teacher-table tbody tr:hover {background:#F1F4F7}
+    .teacher-table small {display:block;color:#667386;font-size:11px;margin-top:3px}
+    .teacher-table .status-pill {display:inline-block;border:1px solid transparent;border-radius:7px;padding:4px 8px;font-size:11px;font-weight:700;white-space:nowrap}
+    .status-pill.success {background:#E7F3EE;color:#1E684D;border-color:#C8E4D7}
+    .status-pill.warning {background:#FBF2E6;color:#885519;border-color:#EFDBBD}
+    .status-pill.danger {background:#F9EAEC;color:#963947;border-color:#EFD1D5}
+    .status-pill.neutral {background:#EEF1F4;color:#526178;border-color:#DDE3E9}
+    button[kind="primary"] {background:#405069!important;border:1px solid #405069!important;color:#fff!important;min-height:44px;padding:0 18px;font-size:.94rem;font-weight:680;border-radius:9px;box-shadow:0 2px 6px rgba(38,52,72,.12);transition:background .16s ease,box-shadow .16s ease}
+    button[kind="primary"]:hover {background:#354154!important;border-color:#354154!important;box-shadow:0 4px 10px rgba(38,52,72,.16)}
+    button[kind="primary"]:focus-visible,button[kind="secondary"]:focus-visible {outline:3px solid #71849B!important;outline-offset:2px}
+    button[kind="secondary"] {background:#fff!important;color:#354154!important;min-height:44px;padding:0 18px;font-size:.94rem;font-weight:620;border-radius:9px;border-color:#C9D1DB!important;transition:background .16s ease,border-color .16s ease}
+    button[kind="secondary"]:hover {background:#F3F5F7!important;border-color:#71849B!important}
+    [class*="st-key-Mark_Present_"] button {background:#248461!important;border-color:#248461!important;color:#fff!important}
+    [class*="st-key-Mark_Present_"] button:hover {background:#1D6F51!important;border-color:#1D6F51!important}
+    [class*="st-key-Mark_Absent_"] button {background:#B84757!important;border-color:#B84757!important;color:#fff!important}
+    [class*="st-key-Mark_Absent_"] button:hover {background:#963947!important;border-color:#963947!important}
+    .page-heading {display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 12px;padding:0 0 12px;border-bottom:1px solid #E0E5EB}
+    .page-heading .page-eyebrow {color:#667386;font-size:10px;font-weight:750;letter-spacing:.13em;text-transform:uppercase}
+    .page-heading .page-title {color:#263448;font-size:23px;font-weight:750;letter-spacing:-.025em;margin-top:2px}
+    .page-heading .page-context {color:#667386;font-size:12px;text-align:right}
+    [data-testid="stPlotlyChart"] {background:#FFFFFF;border:1px solid #E0E5EB;border-radius:12px;padding:8px 10px;box-shadow:0 3px 10px rgba(38,52,72,.045)}
+    [data-testid="stImage"] img {border:1px solid #E0E5EB;border-radius:10px}
+    @media (max-width: 950px) {
+      .block-container {padding:1rem 1.15rem 2rem}
+      section[data-testid="stSidebar"] {min-width:225px}
+    }
+    @media (max-width: 700px) {
+      section[data-testid="stSidebar"] {min-width:0}
+      div[data-testid="stHorizontalBlock"] {flex-wrap:wrap}
+      div[data-testid="stHorizontalBlock"] > [data-testid="column"] {min-width:min(100%,210px)!important}
+      [data-testid="stMetric"] {min-height:88px}
+      .page-heading .page-title {font-size:20px}
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -421,16 +494,41 @@ def format_session(session):
 def main():
     st.set_page_config(page_title="AI Attendance Anomaly Detector", page_icon="▦", layout="wide")
     styles()
-    st.markdown("""
-    <div class="app-brand">
-      <div class="brand-mark">AI</div>
-      <div>
-        <div class="brand-kicker">College attendance workspace</div>
-        <div class="brand-title">AI Attendance Anomaly Detector</div>
-        <div class="brand-subtitle">Teacher review · Video visibility evidence · Manual attendance remains the record</div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+    navigation = ["Overview", "Attendance review", "Student details", "Audit log & export", "Export"]
+    navigation_icons = {
+        "Overview": "▦",
+        "Attendance review": "✓",
+        "Student details": "◎",
+        "Audit log & export": "↗",
+        "Export": "⇩",
+    }
+    navigation_labels = {
+        "Overview": "Overview",
+        "Attendance review": "Attendance Review",
+        "Student details": "Student Details",
+        "Audit log & export": "Audit Log",
+        "Export": "Export",
+    }
+    with st.sidebar:
+        st.markdown("""
+        <div class="sidebar-brand">
+          <div class="sidebar-brand-mark">◉</div>
+          <div class="brand-kicker">Attendance workspace</div>
+          <div class="brand-title">AI Attendance<br>Anomaly Detector</div>
+          <div class="brand-subtitle">Teacher review · Video visibility evidence</div>
+        </div>
+        """, unsafe_allow_html=True)
+        active_section = st.radio(
+            "Workspace",
+            navigation,
+            format_func=lambda label: f"{navigation_icons[label]}  {navigation_labels[label]}",
+            label_visibility="visible",
+            key="dashboard_navigation",
+        )
+        st.markdown(
+            '<div class="sidebar-footer">Manual attendance remains the record.<br>Review decisions are recorded in the audit log.</div>',
+            unsafe_allow_html=True,
+        )
 
     videos = discover_videos()
     top_left, top_right = st.columns([1.5, 1])
@@ -491,7 +589,7 @@ def main():
     with header_cols[1]:
         st.markdown(f"<div class='session-header'><div class='eyebrow'>Video</div><h3>{session['video_name']}</h3></div>", unsafe_allow_html=True)
     with header_cols[2]:
-        status_color = "#2f765c" if session.get("status") == "Completed" else "#a36214" if session.get("status") == "Running" else "#a33d3d"
+        status_color = "#248461" if session.get("status") == "Completed" else "#B87526" if session.get("status") == "Running" else "#B84757"
         st.markdown(f"<div class='session-header'><div class='eyebrow'>Processing status</div><h3 style='color:{status_color}'>{session.get('status','Unknown')}</h3></div>", unsafe_allow_html=True)
     if session.get("status") != "Completed":
         if session.get("status") == "Failed":
@@ -534,18 +632,43 @@ def main():
     report_dir.mkdir(parents=True, exist_ok=True)
     manual_path = report_dir / "manual_attendance.csv"
     manual = normalize_manual(safe_csv(manual_path), roster)
-    tabs = st.tabs(["Overview", "Attendance review", "Student details", "Audit log & export"])
+    st.markdown(
+        f"<div class='page-heading'><div><div class='page-eyebrow'>Class attendance workspace</div>"
+        f"<div class='page-title'>{escape(navigation_labels[active_section])}</div></div>"
+        f"<div class='page-context'>{escape(format_session(session))}</div></div>",
+        unsafe_allow_html=True,
+    )
 
     seen_count = int(merged.video_status.isin(["Seen", "Seen (low confidence)"]).sum())
     not_seen_count = int(merged.video_status.eq("Not seen").sum())
     low_count = int(merged.video_status.eq("Seen (low confidence)").sum())
     flagged_count = int(merged["flags"].astype(str).ne("—").sum())
-    with tabs[0]:
+    export_state = load_review_state(report_dir)
+    export = merged.merge(manual[["student_id", "manual_attendance"]], on="student_id", how="left")
+    export["manual_attendance"] = export.manual_attendance.fillna("Not recorded")
+    export["reconciliation"] = export.apply(classify, axis=1)
+    export["review_status"] = export.student_id.map(
+        lambda sid: export_state.get(str(sid), {}).get("review_status", "Pending"))
+    export["final_attendance"] = export.student_id.map(
+        lambda sid: export_state.get(str(sid), {}).get("final_attendance", ""))
+    export["review_reason_or_note"] = export.student_id.map(
+        lambda sid: export_state.get(str(sid), {}).get("reason", export_state.get(str(sid), {}).get("note", "")))
+    final_columns = ["student_id", "name", "roll_no", "manual_attendance", "video_status", "reconciliation",
+        "final_attendance", "review_status", "review_reason_or_note", "visible_percent", "confidence", "flags"]
+    final = export[[column for column in final_columns if column in export]]
+    final.to_csv(report_dir / "final_attendance.csv", index=False)
+
+    if active_section == 'Overview':
         st.subheader("Session overview")
-        cols = st.columns(6)
-        for col, label, value in zip(cols, ["Roster", "Seen", "Not seen", "Low confidence", "Unknown tracks", "Flags"],
-                                     [len(merged), seen_count, not_seen_count, low_count, unknown_track_count, flagged_count]):
-            col.metric(label, value)
+        metric_labels = ["Roster", "Seen", "Not seen", "Low confidence", "Unknown tracks", "Flags"]
+        metric_values = [len(merged), seen_count, not_seen_count, low_count, unknown_track_count, flagged_count]
+        metric_keys = ["kpi_roster", "kpi_seen", "kpi_not_seen", "kpi_low_confidence", "kpi_unknown_tracks", "kpi_flags"]
+        for start in (0, 3):
+            cols = st.columns(3)
+            for col, key, label, value in zip(cols, metric_keys[start:start + 3],
+                                               metric_labels[start:start + 3], metric_values[start:start + 3]):
+                with col.container(key=key):
+                    st.metric(label, value)
         st.caption(f"YOLO tracker produced {track_id_count} track IDs. Track IDs can split or merge and are not a headcount.")
         st.info("Not visible does not mean a student left the room. The teacher makes every attendance decision.")
         st.subheader("Reconciliation summary")
@@ -557,7 +680,7 @@ def main():
         render_reconciliation_table(preview[["student_id", "name", "roll_no", "manual_attendance", "video_status",
             "visible_time", "confidence_score", "confidence", "flags", "reconciliation"]])
 
-    with tabs[1]:
+    if active_section == 'Attendance review':
         st.subheader("Attendance reconciliation")
         st.caption("Select a student and record the teacher's mark. Video evidence never sets attendance automatically.")
         quick_student = st.selectbox("Student to mark", merged.student_id.tolist(),
@@ -598,7 +721,7 @@ def main():
         render_reconciliation_table(review[["student_id", "name", "roll_no", "manual_attendance", "video_status",
             "visible_time", "confidence_score", "confidence", "flags", "reconciliation", "review_status"]])
 
-    with tabs[2]:
+    if active_section == 'Student details':
         st.subheader("Student details")
         chosen = st.selectbox("Select student", merged.student_id.tolist(),
             format_func=lambda sid: f"{merged.loc[merged.student_id == sid, 'name'].iloc[0]} · {sid}")
@@ -625,11 +748,14 @@ def main():
                        f"{row.face_detected_visible_percent:.1f}% · Face samples: {int(row.face_samples)}")
         with detail_right:
             gauge = go.Figure(go.Indicator(mode="gauge+number", value=float(row.confidence_score),
-                number={"suffix": "/100", "font": {"color": "#17324f", "size": 30}},
-                title={"text": f"Confidence · {row.confidence}", "font": {"size": 16, "color": "#596b7a"}},
-                gauge={"axis": {"range": [0, 100]}, "bar": {"color": "#43836d"},
-                       "bgcolor": "white", "bordercolor": "#dfe6ed", "steps": [{"range": [0, 100], "color": "#f2f5f7"}]}))
-            gauge.update_layout(height=220, margin={"l": 20, "r": 20, "t": 35, "b": 10}, paper_bgcolor="white")
+                number={"suffix": "/100", "font": {"color": "#263448", "size": 30}},
+                title={"text": f"Confidence · {row.confidence}", "font": {"size": 16, "color": "#667386"}},
+                gauge={"axis": {"range": [0, 100], "tickcolor": "#667386", "tickfont": {"color": "#667386"}},
+                       "bar": {"color": "#526178"},
+                       "bgcolor": "#FFFFFF", "bordercolor": "#E0E5EB",
+                       "steps": [{"range": [0, 100], "color": "#EEF1F4"}]}))
+            gauge.update_layout(height=220, margin={"l": 20, "r": 20, "t": 35, "b": 10},
+                                paper_bgcolor="#FFFFFF")
             st.plotly_chart(gauge, use_container_width=True, config={"displayModeBar": False})
         st.markdown("#### Face evidence")
         identities = safe_csv(evidence_dir / "identities.csv")
@@ -731,24 +857,14 @@ def main():
                     st.success("Assignment saved for teacher review. It does not change enrolment or attendance.")
                     st.rerun()
 
-    with tabs[3]:
+    if active_section == 'Audit log & export':
         st.subheader("Audit log")
         audit = safe_csv(report_dir / "audit_log.csv")
         if audit.empty:
             st.caption("No teacher review actions have been recorded for this session.")
         else:
             render_simple_table(audit.sort_values("timestamp", ascending=False))
-        state = load_review_state(report_dir)
-        export = merged.merge(manual[["student_id", "manual_attendance"]], on="student_id", how="left")
-        export["manual_attendance"] = export.manual_attendance.fillna("Not recorded")
-        export["reconciliation"] = export.apply(classify, axis=1)
-        export["review_status"] = export.student_id.map(lambda sid: state.get(str(sid), {}).get("review_status", "Pending"))
-        export["final_attendance"] = export.student_id.map(lambda sid: state.get(str(sid), {}).get("final_attendance", ""))
-        export["review_reason_or_note"] = export.student_id.map(lambda sid: state.get(str(sid), {}).get("reason", state.get(str(sid), {}).get("note", "")))
-        final_columns = ["student_id", "name", "roll_no", "manual_attendance", "video_status", "reconciliation",
-            "final_attendance", "review_status", "review_reason_or_note", "visible_percent", "confidence", "flags"]
-        final = export[[column for column in final_columns if column in export]]
-        final.to_csv(report_dir / "final_attendance.csv", index=False)
+    if active_section == "Export":
         st.subheader("Final attendance export")
         st.caption("Pending rows have a blank final value. Only teacher-confirmed or corrected values are exported as final attendance.")
         st.download_button("Download final attendance", final.to_csv(index=False), "final_attendance.csv",

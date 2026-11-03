@@ -25,6 +25,8 @@
 - Replaced the light lavender appearance with the Midnight Intelligence dark palette, styling the existing sidebar navigation, KPI cards, tables, notices, controls, session status, timeline, and confidence gauge. Existing navigation destinations and attendance/review/export behavior are retained.
 - Separated the existing audit log and final CSV download into clearly labeled Audit Log and Export sidebar destinations; retained the previous audit navigation value for session-state compatibility and kept CSV generation on every rerun.
 - Replaced the dark theme with the SIS-inspired slate-blue/white palette across the Streamlit theme, dashboard surfaces, metrics, tables, controls, status colors, and existing charts. The six metrics retain their values and are now wrapped with presentation-only keys for category accent styling. Syntax, TOML, Plotly gauge construction, and synthetic M3 checks pass. To run it, use `.\venv\Scripts\python.exe -m streamlit run src\dashboard.py` from the project root.
+- Added an isolated authentication store in `src/auth.py` with salted PBKDF2-HMAC-SHA256 password hashes, case-insensitive unique usernames, and login/logout state helpers. The auth database defaults to the current user's local application-data folder and can be overridden with `ATTENDANCE_AUTH_DB_PATH`; attendance/enrollment tables are unchanged. The backend smoke test is `.\venv\Scripts\python.exe src\auth_smoke.py`.
+- Added login/sign-up forms, password confirmation and duplicate-account feedback, a session-state dashboard guard, and a sidebar logout action. Verified the full UI flow with Streamlit AppTest, including the masked password field and the unauthenticated gate. Updated README setup/security notes and added `auth_smoke.py` to synthetic checks. Run with `.\venv\Scripts\python.exe -m streamlit run src\dashboard.py`, then create an account from the login screen.
 
 ## Next
 - README setup documentation is now present. The M5 accuracy evaluation system remains deferred per the user's instruction not to build an evaluation system yet.
@@ -34,6 +36,7 @@
 - The user-run video demo produced 22 temporary identities and completed tracking/gallery construction, but the first attempt then failed during M2 export; the empty-sample case is now fixed and synthetic checks pass. The complete video → M3 → dashboard rerun remains unverified here. Demo identities are same-video labels only; no accuracy claim is supported.
 - The faster balanced settings have not been run against the classroom video, so actual latency and tracking coverage remain unmeasured. Ultralytics may need to fetch `yolo11s.pt` if it is not cached. This change is a speed/coverage compromise, not an accuracy evaluation.
 - The slate-blue dashboard has passed syntax/TOML and synthetic checks but has not been visually checked in a browser. Restart the Streamlit server from the project root to load the updated theme config and page styling.
+- Next: run all requested existing smoke checks and review the complete diff; authentication is ready to run with the app command above.
 
 ## How to run (Windows PowerShell)
 Place `class_1.mp4` in the configured local demo video directory (`E:\zsp_project\attendance-data` by default), then launch from the project root:

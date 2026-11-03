@@ -9,7 +9,7 @@ A local college demo for reviewing classroom visibility evidence alongside teach
 - The temporary demo mode derives its identities from the first 30% of the same video, then matches the remainder. This is only to demonstrate the application flow; it is **not an accuracy evaluation**.
 - Back-row, occluded, turned-away, or masked faces may be missed. There is no liveness detection, so photo spoofing is not prevented. Recognition systems may have demographic performance differences.
 - Recognition accuracy and tracking coverage have not been validated on a labelled, independent test set. Do not use demo outputs for real attendance decisions.
-- This is a local demonstration, not a production deployment. It has no institutional login or ERP integration. Obtain recorded consent and review applicable privacy requirements, including India's DPDP Act 2023, before any real deployment.
+- This is a local demonstration, not a production deployment. It has local self-service accounts, but no institutional SSO, per-user attendance-data isolation, or ERP integration. Obtain recorded consent and review applicable privacy requirements, including India's DPDP Act 2023, before any real deployment.
 
 ## Requirements
 
@@ -57,6 +57,8 @@ $env:ATTENDANCE_VIDEO_DIR = 'E:\zsp_project\attendance-data'
 Set-Location E:\zsp_project\ai-attendance-detector
 .\venv\Scripts\python.exe -m streamlit run src\dashboard.py
 ```
+
+On first launch, choose **Sign Up** to create a local account, then sign in. Passwords are stored as salted PBKDF2-HMAC-SHA256 hashes in a separate SQLite file under `%LOCALAPPDATA%\AI Attendance Detector\auth.sqlite3`; the student/enrollment database is not used for authentication. Set `ATTENDANCE_AUTH_DB_PATH` before launching only if you need to choose another local auth database location. The application session stays signed in until you choose **Log out** or the Streamlit session ends.
 
 In the dashboard:
 
@@ -114,7 +116,10 @@ Set-Location E:\zsp_project\ai-attendance-detector
 .\venv\Scripts\python.exe src\m3_smoke.py
 .\venv\Scripts\python.exe src\demo_smoke.py
 .\venv\Scripts\python.exe src\enrol_smoke.py
+.\venv\Scripts\python.exe src\auth_smoke.py
 ```
+
+The authentication check creates a disposable synthetic account database and uses Streamlit's app test harness to exercise sign-up validation, duplicate usernames, login success/failure, logout, and the unauthenticated dashboard gate. It does not access the configured local auth database or process video.
 
 The M3 confidence score is:
 

@@ -2,6 +2,7 @@
 import csv
 from html import escape
 import json
+import logging
 import os
 import sqlite3
 import subprocess
@@ -12,6 +13,7 @@ from pathlib import Path
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import auth
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,6 +26,7 @@ SESSIONS_DIR = ROOT / "output" / "class_sessions"
 SESSION_INDEX = SESSIONS_DIR / "sessions.json"
 DEMO_SESSIONS_DIR = ROOT / "output" / "demo_sessions"
 ATTENDANCE_CHOICES = ["Not recorded", "Present", "Absent"]
+LOGGER = logging.getLogger(__name__)
 
 
 def safe_csv(path):
@@ -417,6 +420,8 @@ def styles():
     section[data-testid="stSidebar"] .sidebar-brand .brand-kicker {color:#F5F7FB;font-size:10px;font-weight:750;letter-spacing:.13em;text-transform:uppercase}
     .sidebar-brand .brand-title {color:#fff;font-size:17px;line-height:1.25;font-weight:750;letter-spacing:-.02em;margin-top:6px}
     section[data-testid="stSidebar"] .sidebar-brand .brand-subtitle {color:#E0E7F0;font-size:11px;line-height:1.5;margin-top:8px}
+    .sidebar-user {margin:14px 0 8px;padding:10px 11px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:9px;color:#E0E7F0;font-size:11px}
+    .sidebar-user strong {display:block;margin-top:3px;color:#fff;font-size:13px;overflow-wrap:anywhere}
     section[data-testid="stSidebar"] [data-testid="stRadio"] > [data-testid="stWidgetLabel"] {font-size:10px;font-weight:750;letter-spacing:.12em;color:#FFFFFF!important;text-transform:uppercase;margin:0 0 8px}
     section[data-testid="stSidebar"] [data-testid="stRadio"] > [data-testid="stWidgetLabel"] p {color:#FFFFFF!important;letter-spacing:.12em}
     section[data-testid="stSidebar"] [data-testid="stRadio"] > div {gap:5px}
@@ -486,6 +491,121 @@ def styles():
     """, unsafe_allow_html=True)
 
 
+def authentication_styles():
+    st.markdown("""
+    <style>
+    section[data-testid="stSidebar"] {display:none!important}
+    .block-container {max-width:1120px;padding:clamp(2rem,7vh,5rem) 1.25rem 3rem}
+    .auth-brand {text-align:center;margin:0 auto 22px}
+    .auth-brand-mark {display:grid;place-items:center;width:54px;height:54px;margin:0 auto 14px;border-radius:15px;background:#405069;color:#fff;font-size:20px;font-weight:800;box-shadow:0 6px 16px rgba(38,52,72,.16)}
+    .auth-brand-kicker {color:#667386;font-size:10px;font-weight:750;letter-spacing:.14em;text-transform:uppercase}
+    .auth-brand-title {margin-top:5px;color:#263448;font-size:27px;font-weight:760;letter-spacing:-.035em}
+    .auth-brand-subtitle {margin-top:5px;color:#667386;font-size:13px}
+    .auth-heading {margin:0 0 4px;color:#263448;font-size:21px;font-weight:720;letter-spacing:-.02em}
+    .auth-description {margin:0 0 18px;color:#667386;font-size:13px;line-height:1.5}
+    [data-testid="stForm"] {max-width:500px;margin:0 auto;padding:25px 27px;background:#fff;border:1px solid #E0E5EB;border-radius:14px;box-shadow:0 12px 32px rgba(38,52,72,.08)}
+    [data-testid="stForm"] [data-testid="stWidgetLabel"] p {color:#354154;font-size:13px;font-weight:650}
+    [data-testid="stForm"] [data-testid="stTextInput"] input {min-height:46px}
+    [data-testid="stForm"] button[kind="primary"] {width:100%;margin-top:7px}
+    .auth-switch {max-width:500px;margin:13px auto 0}
+    .auth-switch button[kind="secondary"] {width:100%;border:0!important;background:transparent!important;color:#405069!important}
+    .auth-switch button[kind="secondary"]:hover {background:#E9EDF2!important}
+    [data-testid="stAlert"] {max-width:500px;margin:12px auto}
+    @media (max-width: 700px) {
+        .block-container {padding:2rem .85rem}
+        .auth-brand-title {font-size:23px}
+        [data-testid="stForm"] {padding:21px 18px}
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+
+def render_auth_page():
+    authentication_styles()
+    _, center, _ = st.columns([1, 1.25, 1])
+    with center:
+        if st.session_state.pop("clear_signup_fields", False):
+            for key in ("signup_username", "signup_password", "signup_confirmation"):
+                st.session_state.pop(key, None)
+        page = st.session_state.get("auth_page", "login")
+        is_signup = page == "signup"
+        title = "Create your account" if is_signup else "Welcome back"
+        description = (
+            "Register an account to access the attendance workspace."
+            if is_signup else "Sign in to continue to your attendance workspace."
+        )
+        st.markdown(
+            '<div class="auth-brand"><div class="auth-brand-mark">AI</div>'
+            '<div class="auth-brand-kicker">Attendance workspace</div>'
+            '<div class="auth-brand-title">AI Attendance Detector</div>'
+            '<div class="auth-brand-subtitle">Teacher review · Video visibility evidence</div></div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div class="auth-heading">{title}</div><div class="auth-description">{description}</div>',
+            unsafe_allow_html=True,
+        )
+
+        flash_message = st.session_state.pop("auth_flash_message", None)
+        if flash_message:
+            st.success(flash_message)
+
+        if is_signup:
+            with st.form("signup_form"):
+                username = st.text_input("Username", placeholder="Choose a username", key="signup_username")
+                password = st.text_input("Password", placeholder="Create a password", type="password",
+                                         key="signup_password")
+                confirmation = st.text_input("Confirm Password", placeholder="Re-enter your password",
+                                             type="password", key="signup_confirmation")
+                submitted = st.form_submit_button("Create Account", type="primary", use_container_width=True)
+            if submitted:
+                try:
+                    clean_username = auth.validate_registration(username, password, confirmation)
+                    auth.register_user(clean_username, password)
+                except auth.UsernameExistsError:
+                    st.error("That username is already registered. Choose another username or return to Login.")
+                except ValueError as error:
+                    st.error(str(error))
+                except (OSError, sqlite3.Error):
+                    LOGGER.exception("Could not save an authentication account")
+                    st.error("The account could not be saved because local authentication storage is unavailable.")
+                else:
+                    st.session_state["clear_signup_fields"] = True
+                    st.session_state["auth_page"] = "login"
+                    st.session_state["auth_flash_message"] = "Account created. Sign in with your new credentials."
+                    st.rerun()
+            st.markdown('<div class="auth-switch">', unsafe_allow_html=True)
+            if st.button("Already have an account? Return to Login", key="show_login",
+                         type="secondary", use_container_width=True):
+                st.session_state["auth_page"] = "login"
+                st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+            return
+
+        with st.form("login_form", clear_on_submit=True):
+            username = st.text_input("Username", placeholder="Enter your username", key="login_username")
+            password = st.text_input("Password", placeholder="Enter your password", type="password",
+                                     key="login_password")
+            submitted = st.form_submit_button("Login", type="primary", use_container_width=True)
+        if submitted:
+            try:
+                valid_credentials = auth.authenticate_user(username, password)
+            except (OSError, sqlite3.Error):
+                LOGGER.exception("Could not access authentication storage")
+                st.error("Sign-in is unavailable because local authentication storage could not be accessed.")
+            else:
+                if valid_credentials:
+                    st.session_state["authenticated_user"] = username.strip()
+                    st.session_state["auth_flash_message"] = f"Signed in as {username.strip()}."
+                    st.rerun()
+                st.error("The username or password is incorrect.")
+        st.markdown('<div class="auth-switch">', unsafe_allow_html=True)
+        if st.button("New here? Sign Up", key="show_signup", type="secondary", use_container_width=True):
+            st.session_state["auth_page"] = "signup"
+            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
 def format_session(session):
     date_text = session.get("created_at", "")[:16].replace("T", " ")
     return f"{session.get('class_id', 'Class')} · {session.get('video_name', 'Video')} · {date_text}"
@@ -494,6 +614,13 @@ def format_session(session):
 def main():
     st.set_page_config(page_title="AI Attendance Anomaly Detector", page_icon="▦", layout="wide")
     styles()
+    if not auth.is_authenticated(st.session_state):
+        render_auth_page()
+        return
+
+    flash_message = st.session_state.pop("auth_flash_message", None)
+    if flash_message:
+        st.success(flash_message)
     navigation = ["Overview", "Attendance review", "Student details", "Audit log & export", "Export"]
     navigation_icons = {
         "Overview": "▦",
@@ -525,6 +652,16 @@ def main():
             label_visibility="visible",
             key="dashboard_navigation",
         )
+        signed_in_user = str(st.session_state["authenticated_user"])
+        st.markdown(
+            f'<div class="sidebar-user">Signed in as<strong>{escape(signed_in_user)}</strong></div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("Log out", key="logout", type="secondary", use_container_width=True):
+            auth.logout(st.session_state)
+            st.session_state["auth_page"] = "login"
+            st.session_state["auth_flash_message"] = "You have been logged out."
+            st.rerun()
         st.markdown(
             '<div class="sidebar-footer">Manual attendance remains the record.<br>Review decisions are recorded in the audit log.</div>',
             unsafe_allow_html=True,

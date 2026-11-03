@@ -67,6 +67,8 @@ In the dashboard:
 3. Select a video and choose **Start class session**.
 4. Review the generated visibility evidence and edit the clearly labelled sample manual attendance marks for the demonstration.
 
+Use the sidebar to move between **Overview**, **Attendance review**, **Student details**, **Audit log**, and **Export**. Attendance review keeps unreviewed rows pending; teachers can confirm or correct a final value, or record a follow-up note. Unknown-track assignments are saved for review and do not change enrollment or attendance. The export contains only teacher-confirmed or corrected final attendance; pending rows remain blank.
+
 The app runs tracking/identity processing (M2), then presence/report generation (M3). Demo reports, evidence crops, temporary identities, and sample roll-call marks stay under `output\demo_sessions\` and are not real enrollment records. Processing can take a while, especially on the first run while YOLO weights are downloaded. The default profile is YOLO11s at 960 px on every second frame; this balances speed and coverage but can miss some small or distant people.
 
 The dashboard can also accept a different local video folder. Set `ATTENDANCE_VIDEO_DIR` before launching; the teacher UI displays video names, not local filesystem paths.

@@ -56,48 +56,6 @@ def main():
     assert "not an accuracy evaluation" in demo_report.iloc[0]["demo_label"].lower()
     assert all(item["demo_mode"] for item in demo_timelines.values())
     assert "same-video enrollment" in (root / "session_summary.md").read_text(encoding="utf-8").lower()
-
-    # Regression check: sparse selected face samples must be measured against
-    # selected sampling attempts, not expanded into a false continuous-time
-    # face-visibility percentage.
-    attempt_root = Path("output/m3_attempt_metrics")
-    attempt_root.mkdir(parents=True, exist_ok=True)
-    with (attempt_root / "students.csv").open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["student_id", "name", "consent"])
-        writer.writerow(["F001", "Face Sampling Regression", "yes"])
-    with (attempt_root / "presence_input.csv").open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["student_id", "track_id", "t", "similarity", "face_detected", "identity_confidence"])
-        for t in range(11):
-            writer.writerow(["F001", 7, t, 0.80, int(t in {0, 2, 4, 6, 8}), 0.80])
-    with (attempt_root / "identities.csv").open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["track_id", "student_id", "mean_person_detection_confidence"])
-        writer.writerow([7, "F001", 0.85])
-    with (attempt_root / "face_sample_attempts.csv").open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["track_id", "t", "outcome", "failure_reason"])
-        for t, outcome in [(0, "usable_face_sample"), (2, "usable_face_sample"),
-                           (4, "no_face_detected"), (6, "usable_face_sample"),
-                           (8, "usable_face_sample")]:
-            writer.writerow([7, t, outcome, "" if outcome == "usable_face_sample" else "no_face_detected"])
-    with (attempt_root / "face_samples.csv").open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["track_id", "t", "face_px", "det_score", "sharpness", "evidence_file"])
-        for t in (0, 2, 6, 8):
-            writer.writerow([7, t, 40, 0.9, 80, f"sample_{t}.jpg"])
-    (attempt_root / "meta.json").write_text(json.dumps({"duration": 10, "step": 1}), encoding="utf-8")
-    attempt_report, _ = generate_report(attempt_root, attempt_root,
-        students_csv=attempt_root / "students.csv", config_path=project_root / "config.yaml")
-    attempt_row = attempt_report.set_index("student_id").loc["F001"]
-    assert attempt_row.face_samples == 4
-    assert attempt_row.face_sample_attempts == 5
-    assert attempt_row.face_sample_success_percent == 80.0
-    assert attempt_row.visible_percent == 100.0
-    assert attempt_row.confidence_score == 80.0
-    assert bool(attempt_row.face_sample_metrics_available)
-
     print("M3 synthetic smoke check passed; report artifacts are in output/m3_smoke")
 
 

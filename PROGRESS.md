@@ -1,4 +1,4 @@
-# Progress log
+﻿# Progress log
 
 ## Done
 - Step A: synthetic session generation and presence/report foundation.
@@ -28,12 +28,16 @@
 - Added an isolated authentication store in `src/auth.py` with salted PBKDF2-HMAC-SHA256 password hashes, case-insensitive unique usernames, and login/logout state helpers. The auth database defaults to the current user's local application-data folder and can be overridden with `ATTENDANCE_AUTH_DB_PATH`; attendance/enrollment tables are unchanged. The backend smoke test is `.\venv\Scripts\python.exe src\auth_smoke.py`.
 - Added login/sign-up forms, password confirmation and duplicate-account feedback, a session-state dashboard guard, and a sidebar logout action. Verified the full UI flow with Streamlit AppTest, including the masked password field and the unauthenticated gate. Updated README setup/security notes and added `auth_smoke.py` to synthetic checks. Run with `.\venv\Scripts\python.exe -m streamlit run src\dashboard.py`, then create an account from the login screen.
 
+- Dashboard video discovery now has an editable **Test video folder** field; it lists supported video files from the selected folder top level. Initial folder can be set with ATTENDANCE_VIDEO_DIR. Restart Streamlit and select the folder containing the clips.
+
+- The dashboard defaults to the project-root `videos` folder, alongside `src`; uploaded clips stay ignored by Git. Put videos there and restart Streamlit to list them.
+
 ## Next
 - README setup documentation is now present. The M5 accuracy evaluation system remains deferred per the user's instruction not to build an evaluation system yet.
 - The local video-to-dashboard workflow has not been run end-to-end by the agent. Local camera capture, automatic session delivery, and ERP integration remain outside this demo; recognition accuracy also remains unvalidated.
 - The actual M1 database location is not configured in this workspace. Set `ATTENDANCE_DB_PATH` to the SQLite database created by M1 before starting a new class session.
 - Real enrollment is opt-in and has not been run here. Place the roster at `data\students.csv` and photos under `data\enrol\<student_id>\`; all of `data\` and `*.db` are ignored by Git. Review consent and local retention requirements before running it.
-- The user-run video demo produced 22 temporary identities and completed tracking/gallery construction, but the first attempt then failed during M2 export; the empty-sample case is now fixed and synthetic checks pass. The complete video → M3 → dashboard rerun remains unverified here. Demo identities are same-video labels only; no accuracy claim is supported.
+- The user-run video demo produced 22 temporary identities and completed tracking/gallery construction, but the first attempt then failed during M2 export; the empty-sample case is now fixed and synthetic checks pass. The complete video â†’ M3 â†’ dashboard rerun remains unverified here. Demo identities are same-video labels only; no accuracy claim is supported.
 - The faster balanced settings have not been run against the classroom video, so actual latency and tracking coverage remain unmeasured. Ultralytics may need to fetch `yolo11s.pt` if it is not cached. This change is a speed/coverage compromise, not an accuracy evaluation.
 - The slate-blue dashboard has passed syntax/TOML and synthetic checks but has not been visually checked in a browser. Restart the Streamlit server from the project root to load the updated theme config and page styling.
 - Next: run all requested existing smoke checks and review the complete diff; authentication is ready to run with the app command above.
@@ -103,3 +107,7 @@ Synthetic demo-gallery helper check (no video or face models):
 The camera tracker defaults to `yolo11s.pt`, 960 px, and every second frame to reduce session time while retaining a stronger detector than the old `yolo11n.pt` / 640 px / every-fifth-frame profile. A first run may download `yolo11s.pt` into Ultralytics' local cache. For slower high-coverage experiments, change `tracker_model` to `yolo11m.pt`, `tracker_image_size` to `1280`, and `tracker_stride` to `1`. Compare annotated output and internal track counts locally; identity thresholds are not lowered to force matches.
 
 The video library defaults to `E:\zsp_project\attendance-data`; an administrator can configure another local folder with the `ATTENDANCE_VIDEO_DIR` environment variable. The dashboard shows video names, not filesystem paths. The selected video and local backend execution are real for the demo, while camera/ERP session provisioning is not connected. The current test identity does not establish recognition accuracy.
+
+
+
+

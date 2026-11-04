@@ -263,43 +263,6 @@ def save_manual_mark(manual_path, roster, student_id, value):
     manual[["student_id", "manual_attendance"]].to_csv(manual_path, index=False)
 
 
-def update_teacher_mark(manual_path, roster, report_dir, teacher, student_id, value):
-    """Save a teacher's manual mark and audit it; stale reviews return to Pending."""
-    current = normalize_manual(safe_csv(manual_path), roster)
-    match = current.loc[current.student_id.astype(str) == str(student_id), "manual_attendance"]
-    old_value = match.iloc[0] if not match.empty else "Not recorded"
-    if old_value == value:
-        return False
-
-    save_manual_mark(manual_path, roster, student_id, value)
-
-    state = load_review_state(report_dir)
-    prior_review = state.get(str(student_id), {})
-    prior_status = prior_review.get("review_status", "Pending")
-    if prior_status != "Pending":
-        # A changed manual mark invalidates the previous confirmation/correction/follow-up.
-        state[str(student_id)] = {
-            "review_status": "Pending",
-            "final_attendance": "",
-            "reason": "",
-            "note": "",
-        }
-        save_review_state(report_dir, state)
-        reason = f"Teacher updated manual attendance; previous {prior_status} review reset to Pending"
-    else:
-        reason = "Teacher updated manual attendance mark"
-
-    append_audit(report_dir, {
-        "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "teacher": teacher,
-        "student_id": student_id,
-        "old_value": old_value,
-        "new_value": value,
-        "reason": reason,
-    })
-    return True
-
-
 def tone(value):
     text = str(value or "").lower()
     if any(word in text for word in ("proxy", "problem", "absent", "not seen")):
@@ -414,11 +377,11 @@ def timeline_chart(timeline, report_row):
 def styles():
     st.markdown("""
     <style>
-    :root {--bg:#F4F6FF;--sidebar:#172554;--sidebar-secondary:#243B76;--sidebar-active:#3654A4;--card:#FFFFFF;--surface:#FFFFFF;--ink:#172554;--muted:#64748B;--line:#DEE5F2;--icon:#6366F1;--success:#059669;--warning:#D97706;--danger:#E11D48;--violet:#5B5CE2;--cyan:#0891B2}
-    .stApp {background:linear-gradient(135deg,#F4F6FF 0%,#F8FAFF 48%,#ECF8FF 100%);color:var(--ink)}
-    [data-testid="stAppViewContainer"] {background:transparent}
+    :root {--bg:#F3F5F7;--sidebar:#354154;--sidebar-secondary:#405069;--sidebar-active:#526178;--card:#FFFFFF;--surface:#FFFFFF;--ink:#263448;--muted:#667386;--line:#E0E5EB;--icon:#71849B;--success:#248461;--warning:#B87526;--danger:#B84757}
+    .stApp {background:var(--bg);color:var(--ink)}
+    [data-testid="stAppViewContainer"] {background:var(--bg)}
     .block-container {max-width:1500px;padding:1.15rem 2.2rem 3rem}
-    [data-testid="stHeader"] {background:rgba(244,246,255,.94);backdrop-filter:blur(12px)}
+    [data-testid="stHeader"] {background:rgba(243,245,247,.96);backdrop-filter:blur(10px)}
     [data-testid="stToolbar"], [data-testid="stDecoration"], #MainMenu, footer {display:none!important}
     section[data-testid="stSidebar"] {display:block!important;background:var(--sidebar);border-right:1px solid #2E394B;min-width:260px}
     section[data-testid="stSidebar"] > div {background:var(--sidebar)}
@@ -429,15 +392,13 @@ def styles():
     p, label, [data-testid="stCaptionContainer"] {font-size:.94rem;color:var(--muted);line-height:1.5}
     div[data-testid="stHorizontalBlock"] {gap:1rem;align-items:stretch}
     div[data-testid="stVerticalBlock"] {gap:.8rem}
-    [data-testid="stMetric"] {position:relative;background:linear-gradient(145deg,#FFFFFF 0%,#F8FAFF 100%);border:1px solid var(--line);border-left:4px solid var(--icon);border-radius:15px;padding:14px 16px;min-height:96px;box-shadow:0 6px 18px rgba(39,62,120,.07)}
+    [data-testid="stMetric"] {position:relative;background:var(--card);border:1px solid var(--line);border-left:3px solid var(--icon);border-radius:12px;padding:13px 16px;min-height:94px;box-shadow:0 3px 10px rgba(38,52,72,.045)}
     [data-testid="stMetricLabel"] {font-size:.82rem;font-weight:650;line-height:1.3;color:var(--muted);white-space:normal;overflow-wrap:anywhere;min-height:2.25em}
     [data-testid="stMetricValue"] {font-size:1.55rem;font-weight:720;line-height:1.15;color:var(--ink);overflow-wrap:anywhere}
-    div.st-key-kpi_roster [data-testid="stMetric"] {border-left-color:#6366F1;background:linear-gradient(145deg,#FFFFFF,#EEF2FF)}
-    div.st-key-kpi_seen [data-testid="stMetric"] {border-left-color:#059669;background:linear-gradient(145deg,#FFFFFF,#ECFDF5)}
-    div.st-key-kpi_not_seen [data-testid="stMetric"] {border-left-color:#E11D48;background:linear-gradient(145deg,#FFFFFF,#FFF1F2)}
-    div.st-key-kpi_low_confidence [data-testid="stMetric"] {border-left-color:#D97706;background:linear-gradient(145deg,#FFFFFF,#FFFBEB)}
-    div.st-key-kpi_unknown_tracks [data-testid="stMetric"] {border-left-color:#0891B2;background:linear-gradient(145deg,#FFFFFF,#ECFEFF)}
-    div.st-key-kpi_flags [data-testid="stMetric"] {border-left-color:#8B5CF6;background:linear-gradient(145deg,#FFFFFF,#F5F3FF)}
+    div.st-key-kpi_roster [data-testid="stMetric"],div.st-key-kpi_unknown_tracks [data-testid="stMetric"] {border-left-color:#71849B}
+    div.st-key-kpi_seen [data-testid="stMetric"] {border-left-color:#248461}
+    div.st-key-kpi_not_seen [data-testid="stMetric"] {border-left-color:#B84757}
+    div.st-key-kpi_low_confidence [data-testid="stMetric"],div.st-key-kpi_flags [data-testid="stMetric"] {border-left-color:#B87526}
     [data-baseweb="select"] > div {background:var(--surface)!important;color:var(--ink)!important;border-color:var(--line)!important;border-radius:9px;min-height:42px}
     [data-baseweb="popover"],[data-baseweb="menu"],[role="listbox"] {background:var(--surface)!important;color:var(--ink)!important;border-color:var(--line)!important}
     [role="option"] {background:var(--surface)!important;color:var(--ink)!important}
@@ -452,10 +413,10 @@ def styles():
     [data-testid="stAlert"][kind="error"] {border-left-color:var(--danger)}
     [data-testid="stAlert"][kind="success"] {border-left-color:var(--success)}
     [data-testid="stAlert"] p,[data-testid="stAlert"] [data-testid="stMarkdownContainer"] {color:var(--ink)}
-    .session-header {height:100%;box-sizing:border-box;background:linear-gradient(145deg,#FFFFFF,#F5F7FF);border:1px solid var(--line);border-top:3px solid #6366F1;border-radius:14px;padding:15px 17px;margin:.15rem 0 .55rem;min-height:88px;box-shadow:0 6px 16px rgba(39,62,120,.06)}
+    .session-header {height:100%;box-sizing:border-box;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin:.15rem 0 .55rem;min-height:88px;box-shadow:0 3px 10px rgba(38,52,72,.04)}
     .eyebrow {font-size:.73rem;font-weight:750;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
-    .sidebar-brand {background:linear-gradient(135deg,#283F86 0%,#4F46E5 58%,#0891B2 100%);border:1px solid rgba(255,255,255,.18);border-radius:15px;padding:16px 14px;margin-bottom:20px;box-shadow:0 10px 24px rgba(8,20,64,.22)}
-    .sidebar-brand-mark {display:grid;place-items:center;width:38px;height:38px;margin-bottom:13px;border-radius:11px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.22);color:#fff;font-weight:800;font-size:18px}
+    .sidebar-brand {background:var(--sidebar-secondary);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:15px 14px;margin-bottom:20px}
+    .sidebar-brand-mark {display:grid;place-items:center;width:38px;height:38px;margin-bottom:13px;border-radius:10px;background:var(--sidebar-active);color:#fff;font-weight:800;font-size:18px}
     section[data-testid="stSidebar"] .sidebar-brand .brand-kicker {color:#F5F7FB;font-size:10px;font-weight:750;letter-spacing:.13em;text-transform:uppercase}
     .sidebar-brand .brand-title {color:#fff;font-size:17px;line-height:1.25;font-weight:750;letter-spacing:-.02em;margin-top:6px}
     section[data-testid="stSidebar"] .sidebar-brand .brand-subtitle {color:#E0E7F0;font-size:11px;line-height:1.5;margin-top:8px}
@@ -486,12 +447,12 @@ def styles():
     section[data-testid="stSidebar"] [data-testid="stRadioOption"]:has(input:disabled) svg {color:#AAB5C4!important;fill:#AAB5C4;stroke:#AAB5C4}
     section[data-testid="stSidebar"] [data-testid="stRadio"] input {accent-color:#fff}
     section[data-testid="stSidebar"] .sidebar-footer {border-top:1px solid rgba(255,255,255,.16);margin-top:22px;padding-top:12px;color:#FFFFFF;font-size:11px;line-height:1.55}
-    .section-card {background:linear-gradient(145deg,#FFFFFF,#F8FAFF);border:1px solid var(--line);border-radius:15px;padding:19px 21px;margin:11px 0;box-shadow:0 6px 18px rgba(39,62,120,.06)}
+    .section-card {background:var(--card);border:1px solid var(--line);border-radius:13px;padding:19px 21px;margin:11px 0;box-shadow:0 3px 12px rgba(38,52,72,.04)}
     .teacher-table-wrap {overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 3px 12px rgba(38,52,72,.045);margin:11px 0 18px}
     .teacher-table {width:100%;border-collapse:collapse;background:transparent;color:#263448;font-size:13px;min-width:940px}
-    .teacher-table th {background:linear-gradient(90deg,#EEF2FF,#ECFEFF);color:#334155;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.075em;font-weight:750;padding:13px 14px;border-bottom:1px solid #DCE5F3;white-space:nowrap}
+    .teacher-table th {background:#F3F5F7;color:#526178;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.075em;font-weight:750;padding:13px 14px;border-bottom:1px solid #E0E5EB;white-space:nowrap}
     .teacher-table td {padding:12px 14px;border-bottom:1px solid #E8EBEF;vertical-align:middle;line-height:1.45}
-    .teacher-table tbody tr:nth-child(even) {background:#F8FAFF}
+    .teacher-table tbody tr:nth-child(even) {background:#FAFBFC}
     .teacher-table tbody tr:last-child td {border-bottom:0}
     .teacher-table tbody tr:hover {background:#F1F4F7}
     .teacher-table small {display:block;color:#667386;font-size:11px;margin-top:3px}
@@ -500,26 +461,19 @@ def styles():
     .status-pill.warning {background:#FBF2E6;color:#885519;border-color:#EFDBBD}
     .status-pill.danger {background:#F9EAEC;color:#963947;border-color:#EFD1D5}
     .status-pill.neutral {background:#EEF1F4;color:#526178;border-color:#DDE3E9}
-    button[kind="primary"] {background:linear-gradient(100deg,#4F46E5,#6366F1)!important;border:1px solid #4F46E5!important;color:#fff!important;min-height:44px;padding:0 18px;font-size:.94rem;font-weight:700;border-radius:10px;box-shadow:0 4px 10px rgba(79,70,229,.19);transition:filter .16s ease,box-shadow .16s ease}
-    button[kind="primary"]:hover {filter:brightness(.94);box-shadow:0 6px 14px rgba(79,70,229,.24)}
-    button[kind="primary"]:focus-visible,button[kind="secondary"]:focus-visible {outline:3px solid #A5B4FC!important;outline-offset:2px}
-    button[kind="secondary"] {background:#fff!important;color:#334155!important;min-height:44px;padding:0 18px;font-size:.94rem;font-weight:650;border-radius:10px;border:1px solid #D7DFEF!important;transition:background .16s ease,border-color .16s ease}
-    button[kind="secondary"]:hover {background:#EEF2FF!important;border-color:#A5B4FC!important}
-    [class*="st-key-mark_present_"] button {background:#E8F8EF!important;border:1px solid #A7E3BF!important;color:#166534!important}
-    [class*="st-key-mark_present_"] button[kind="primary"] {background:#16A34A!important;border-color:#16A34A!important;color:#fff!important}
-    [class*="st-key-mark_present_"] button:hover {background:#D1FAE5!important}
-    [class*="st-key-mark_absent_"] button {background:#FFF0F2!important;border:1px solid #F5B9C4!important;color:#9F1239!important}
-    [class*="st-key-mark_absent_"] button[kind="primary"] {background:#E11D48!important;border-color:#E11D48!important;color:#fff!important}
-    [class*="st-key-mark_absent_"] button:hover {background:#FFE4E8!important}
-    [class*="st-key-mark_clear_"] button {min-height:42px;padding:0 8px;color:#64748B!important}
-    .page-heading {display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 16px;padding:17px 21px;border:0;border-radius:15px;background:linear-gradient(110deg,#3730A3 0%,#4F46E5 48%,#0891B2 100%);box-shadow:0 9px 22px rgba(55,48,163,.18)}
-    .page-heading .page-eyebrow {color:#DBEAFE;font-size:10px;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
-    .page-heading .page-title {color:#FFFFFF;font-size:24px;font-weight:780;letter-spacing:-.025em;margin-top:2px}
-    .page-heading .page-context {color:#E0F2FE;font-size:12px;text-align:right}
-    .attendance-row-title {color:#172554;font-size:14px;font-weight:760;line-height:1.3}
-    .attendance-row-meta {color:#64748B;font-size:11px;margin-top:4px}
-    .attendance-section-note {background:linear-gradient(100deg,#EEF2FF,#ECFEFF);border:1px solid #C7D2FE;color:#3730A3;border-radius:11px;padding:11px 14px;font-size:12px;margin:8px 0 14px}
-    [data-testid="stVerticalBlockBorderWrapper"] {border:1px solid #DCE5F3!important;border-radius:13px!important;background:rgba(255,255,255,.94)!important;box-shadow:0 4px 13px rgba(39,62,120,.055)!important;padding:10px 11px!important}
+    button[kind="primary"] {background:#405069!important;border:1px solid #405069!important;color:#fff!important;min-height:44px;padding:0 18px;font-size:.94rem;font-weight:680;border-radius:9px;box-shadow:0 2px 6px rgba(38,52,72,.12);transition:background .16s ease,box-shadow .16s ease}
+    button[kind="primary"]:hover {background:#354154!important;border-color:#354154!important;box-shadow:0 4px 10px rgba(38,52,72,.16)}
+    button[kind="primary"]:focus-visible,button[kind="secondary"]:focus-visible {outline:3px solid #71849B!important;outline-offset:2px}
+    button[kind="secondary"] {background:#fff!important;color:#354154!important;min-height:44px;padding:0 18px;font-size:.94rem;font-weight:620;border-radius:9px;border-color:#C9D1DB!important;transition:background .16s ease,border-color .16s ease}
+    button[kind="secondary"]:hover {background:#F3F5F7!important;border-color:#71849B!important}
+    [class*="st-key-Mark_Present_"] button {background:#248461!important;border-color:#248461!important;color:#fff!important}
+    [class*="st-key-Mark_Present_"] button:hover {background:#1D6F51!important;border-color:#1D6F51!important}
+    [class*="st-key-Mark_Absent_"] button {background:#B84757!important;border-color:#B84757!important;color:#fff!important}
+    [class*="st-key-Mark_Absent_"] button:hover {background:#963947!important;border-color:#963947!important}
+    .page-heading {display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 12px;padding:0 0 12px;border-bottom:1px solid #E0E5EB}
+    .page-heading .page-eyebrow {color:#667386;font-size:10px;font-weight:750;letter-spacing:.13em;text-transform:uppercase}
+    .page-heading .page-title {color:#263448;font-size:23px;font-weight:750;letter-spacing:-.025em;margin-top:2px}
+    .page-heading .page-context {color:#667386;font-size:12px;text-align:right}
     [data-testid="stPlotlyChart"] {background:#FFFFFF;border:1px solid #E0E5EB;border-radius:12px;padding:8px 10px;box-shadow:0 3px 10px rgba(38,52,72,.045)}
     [data-testid="stImage"] img {border:1px solid #E0E5EB;border-radius:10px}
     @media (max-width: 950px) {
@@ -537,180 +491,30 @@ def styles():
     """, unsafe_allow_html=True)
 
 
-
-    # Premium polish layer: deliberately high-contrast and readable on common laptop screens.
-    st.markdown("""
-    <style>
-    :root {
-      --ink-strong:#14213D; --muted-strong:#52627A; --line-premium:#D7E1F0;
-      --navy:#111D45; --indigo:#4F46E5; --cyan:#0891B2;
-      --green:#15803D; --green-soft:#E8F8EF; --red:#BE123C; --red-soft:#FFF0F2;
-    }
-    .block-container {max-width:1640px!important;padding:1.35rem 2.35rem 3.5rem!important}
-    .stApp {color:var(--ink-strong)}
-    h1 {font-size:2.35rem!important;font-weight:820!important;letter-spacing:-.045em!important}
-    h2 {font-size:1.55rem!important;font-weight:780!important;letter-spacing:-.025em!important}
-    h3 {font-size:1.22rem!important;font-weight:740!important}
-    p, label, [data-testid="stCaptionContainer"] {font-size:1rem;line-height:1.55}
-    [data-testid="stCaptionContainer"] p {font-size:.9rem!important;color:#64748B!important}
-    .page-heading {padding:22px 26px!important;border-radius:19px!important;margin-bottom:21px!important;box-shadow:0 13px 30px rgba(55,48,163,.20)!important}
-    .page-heading .page-eyebrow {font-size:11px!important;letter-spacing:.16em!important}
-    .page-heading .page-title {font-size:29px!important;line-height:1.15!important}
-    .page-heading .page-context {font-size:13px!important;font-weight:650!important}
-    [data-testid="stMetric"] {min-height:112px!important;padding:18px 20px!important;border-radius:18px!important}
-    [data-testid="stMetricLabel"] {font-size:.93rem!important;min-height:1.6em!important}
-    [data-testid="stMetricValue"] {font-size:1.9rem!important;font-weight:800!important}
-    [data-testid="stButton"] > button {
-      min-height:50px!important;height:auto!important;padding:10px 16px!important;
-      border-radius:12px!important;font-size:15px!important;font-weight:760!important;
-      letter-spacing:0!important;line-height:1.2!important;white-space:normal!important;
-      transition:transform .15s ease,box-shadow .15s ease,background .15s ease!important;
-    }
-    [data-testid="stButton"] > button span,
-    [data-testid="stButton"] > button p,
-    [data-testid="stFormSubmitButton"] > button span {font-size:15px!important;font-weight:760!important;line-height:1.2!important}
-    [data-testid="stButton"] > button:focus-visible {outline:3px solid #A5B4FC!important;outline-offset:3px!important}
-    [data-testid="stButton"] > button:disabled {opacity:.72!important;color:#FFFFFF!important}
-    [data-testid="stButton"] > button[kind="primary"],
-    [data-testid="stFormSubmitButton"] > button[kind="primary"] {
-      color:#FFFFFF!important;background:linear-gradient(105deg,#4338CA 0%,#4F46E5 58%,#0284C7 100%)!important;
-      border:1px solid #4338CA!important;box-shadow:0 7px 16px rgba(79,70,229,.22)!important;
-    }
-    [data-testid="stButton"] > button[kind="primary"] *,
-    [data-testid="stFormSubmitButton"] > button[kind="primary"] * {color:#FFFFFF!important;fill:#FFFFFF!important}
-    [data-testid="stButton"] > button[kind="secondary"] {
-      color:#24324B!important;background:#FFFFFF!important;border:1px solid #C7D3E4!important;
-      box-shadow:0 2px 5px rgba(20,33,61,.05)!important;
-    }
-    [data-testid="stButton"] > button[kind="secondary"] * {color:inherit!important}
-    [data-testid="stButton"] > button[kind="secondary"]:hover {background:#F1F5FF!important;border-color:#818CF8!important;transform:translateY(-1px)}
-    /* The selected and unselected per-student attendance controls have explicit contrast. */
-    [class*="st-key-mark_present_"] [data-testid="stButton"] > button,
-    [class*="st-key-mark_present_"] button {
-      background:#E8F8EF!important;border:1.5px solid #86D4A5!important;color:#166534!important;
-      box-shadow:0 3px 9px rgba(21,128,61,.08)!important;
-    }
-    [class*="st-key-mark_present_"] [data-testid="stButton"] > button *,
-    [class*="st-key-mark_present_"] button * {color:#166534!important;fill:#166534!important;font-size:15px!important;font-weight:800!important}
-    [class*="st-key-mark_present_"] [data-testid="stButton"] > button[kind="primary"],
-    [class*="st-key-mark_present_"] button[kind="primary"] {
-      background:linear-gradient(105deg,#15803D,#16A34A)!important;border-color:#15803D!important;
-      box-shadow:0 7px 14px rgba(21,128,61,.22)!important;
-    }
-    [class*="st-key-mark_present_"] [data-testid="stButton"] > button[kind="primary"] *,
-    [class*="st-key-mark_present_"] button[kind="primary"] * {color:#FFFFFF!important;fill:#FFFFFF!important}
-    [class*="st-key-mark_present_"] button:hover {background:#D1FAE5!important;transform:translateY(-1px)}
-    [class*="st-key-mark_absent_"] [data-testid="stButton"] > button,
-    [class*="st-key-mark_absent_"] button {
-      background:#FFF0F2!important;border:1.5px solid #FDA4AF!important;color:#9F1239!important;
-      box-shadow:0 3px 9px rgba(190,18,60,.06)!important;
-    }
-    [class*="st-key-mark_absent_"] [data-testid="stButton"] > button *,
-    [class*="st-key-mark_absent_"] button * {color:#9F1239!important;fill:#9F1239!important;font-size:15px!important;font-weight:800!important}
-    [class*="st-key-mark_absent_"] [data-testid="stButton"] > button[kind="primary"],
-    [class*="st-key-mark_absent_"] button[kind="primary"] {
-      background:linear-gradient(105deg,#BE123C,#E11D48)!important;border-color:#BE123C!important;
-      box-shadow:0 7px 14px rgba(190,18,60,.19)!important;
-    }
-    [class*="st-key-mark_absent_"] [data-testid="stButton"] > button[kind="primary"] *,
-    [class*="st-key-mark_absent_"] button[kind="primary"] * {color:#FFFFFF!important;fill:#FFFFFF!important}
-    [class*="st-key-mark_absent_"] button:hover {background:#FFE4E8!important;transform:translateY(-1px)}
-    [class*="st-key-mark_clear_"] button {background:#F8FAFC!important;color:#334155!important;border:1px solid #CBD5E1!important;min-height:50px!important}
-    [class*="st-key-mark_clear_"] button * {color:#334155!important;font-size:14px!important;font-weight:700!important}
-    .attendance-row-title {font-size:16px!important;font-weight:800!important;color:#172554!important;line-height:1.35!important}
-    .attendance-row-meta {font-size:12px!important;line-height:1.45!important;color:#53647D!important;margin-top:5px!important}
-    .attendance-section-note {font-size:14px!important;line-height:1.55!important;padding:15px 18px!important;border-radius:14px!important}
-    .eyebrow {font-size:12px!important;letter-spacing:.11em!important;font-weight:800!important;color:#53647D!important}
-    [data-testid="stVerticalBlockBorderWrapper"] {border:1px solid #CFDAEA!important;border-radius:16px!important;background:rgba(255,255,255,.98)!important;box-shadow:0 5px 15px rgba(39,62,120,.065)!important;padding:14px 15px!important}
-    .teacher-table {font-size:14px!important;min-width:1020px!important}
-    .teacher-table th {font-size:11px!important;padding:15px 16px!important}
-    .teacher-table td {padding:15px 16px!important;line-height:1.5!important}
-    .teacher-table small {font-size:12px!important}
-    .teacher-table .status-pill {font-size:12px!important;padding:5px 10px!important;border-radius:8px!important}
-    .session-header {min-height:105px!important;padding:18px 20px!important;border-radius:16px!important}
-    .session-header h3 {font-size:1.28rem!important}
-    @media (max-width: 1150px) {
-      .block-container {padding:1rem 1.1rem 2.5rem!important}
-      [data-testid="stButton"] > button {font-size:14px!important;padding:9px 9px!important}
-    }
-    @media (max-width: 760px) {
-      .block-container {padding:.8rem .7rem 2rem!important}
-      .page-heading .page-title {font-size:23px!important}
-      [data-testid="stMetric"] {min-height:92px!important;padding:13px!important}
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-
 def authentication_styles():
     st.markdown("""
     <style>
     section[data-testid="stSidebar"] {display:none!important}
-    [data-testid="stHeader"] {background:transparent!important}
-    .stApp {background:
-      radial-gradient(circle at 12% 15%,rgba(99,102,241,.20),transparent 28%),
-      radial-gradient(circle at 88% 85%,rgba(6,182,212,.17),transparent 30%),
-      linear-gradient(135deg,#F4F7FF 0%,#EEF3FF 48%,#ECFEFF 100%)!important;}
-    .block-container {max-width:1320px!important;min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:2.2rem 2.4rem 2.8rem!important}
-    .auth-hero {position:relative;isolation:isolate;overflow:hidden;min-height:600px;height:100%;box-sizing:border-box;padding:42px 42px 34px;border-radius:30px;color:#FFFFFF;background:linear-gradient(145deg,#111D45 0%,#263B85 45%,#4F46E5 77%,#0891B2 120%);box-shadow:0 28px 65px rgba(31,41,100,.24);display:flex;flex-direction:column;justify-content:space-between}
-    .auth-hero:before {content:"";position:absolute;z-index:-1;width:380px;height:380px;border:1px solid rgba(255,255,255,.13);border-radius:50%;right:-115px;top:-115px;box-shadow:0 0 0 34px rgba(255,255,255,.035),0 0 0 70px rgba(255,255,255,.025)}
-    .auth-hero:after {content:"";position:absolute;z-index:-1;width:260px;height:260px;border-radius:50%;right:8%;bottom:-165px;background:rgba(34,211,238,.22);filter:blur(12px)}
-    .auth-hero-top {display:flex;align-items:center;justify-content:space-between;gap:12px}
-    .auth-hero-brand {display:flex;align-items:center;gap:13px}
-    .auth-hero-mark {display:grid;place-items:center;width:50px;height:50px;border-radius:16px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.27);font-size:20px;font-weight:900;box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
-    .auth-hero-brandname {font-size:15px;font-weight:850;letter-spacing:.01em;color:#FFFFFF}
-    .auth-hero-brandmeta {font-size:10px;font-weight:750;letter-spacing:.16em;text-transform:uppercase;color:#C7D2FE;margin-top:4px}
-    .auth-local-pill {border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(255,255,255,.1);color:#E0F2FE;padding:8px 12px;font-size:10px;font-weight:800;letter-spacing:.09em;white-space:nowrap}
-    .auth-hero-copy {margin:55px 0 34px;max-width:560px}
-    .auth-hero-kicker {display:inline-flex;align-items:center;gap:8px;color:#A5F3FC;font-size:11px;font-weight:850;letter-spacing:.17em;text-transform:uppercase;margin-bottom:18px}
-    .auth-hero-kicker:before {content:"";height:2px;width:26px;background:#67E8F9;border-radius:99px}
-    .auth-hero-title {font-size:clamp(36px,4.2vw,58px);line-height:1.04;font-weight:900;letter-spacing:-.055em;color:#FFFFFF;margin:0 0 20px}
-    .auth-hero-title span {color:#A5F3FC}
-    .auth-hero-description {font-size:16px;line-height:1.75;color:#E0E7FF;max-width:510px;margin:0}
-    .auth-hero-featurebox {background:rgba(255,255,255,.105);border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:21px 22px;backdrop-filter:blur(10px);box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
-    .auth-hero-featuretitle {font-size:10px;font-weight:850;letter-spacing:.16em;text-transform:uppercase;color:#C7D2FE;margin-bottom:15px}
-    .auth-hero-features {display:grid;grid-template-columns:1fr 1fr;gap:15px 18px}
-    .auth-hero-feature {display:flex;align-items:flex-start;gap:10px;color:#FFFFFF;font-size:13px;font-weight:650;line-height:1.5}
-    .auth-hero-check {flex:0 0 22px;height:22px;display:grid;place-items:center;border-radius:8px;background:rgba(34,211,238,.16);color:#A5F3FC;font-weight:900}
-    .auth-hero-foot {margin-top:25px;font-size:11px;line-height:1.5;color:#C7D2FE}
-    .auth-panel {padding:15px 28px 15px 34px}
-    .auth-panel-kicker {font-size:11px;color:#4F46E5;font-weight:850;letter-spacing:.17em;text-transform:uppercase;margin-bottom:10px}
-    .auth-heading {font-size:34px;line-height:1.1;color:#152449;font-weight:900;letter-spacing:-.045em;margin:0 0 10px}
-    .auth-description {font-size:15px;color:#60708B;line-height:1.65;margin:0 0 26px;max-width:430px}
-    .auth-flash {margin:0 0 14px}
-    [data-testid="stForm"] {max-width:none!important;width:100%;margin:0!important;padding:30px 30px 27px!important;background:rgba(255,255,255,.96)!important;border:1px solid #DCE5F3!important;border-radius:22px!important;box-shadow:0 20px 48px rgba(31,41,100,.11)!important}
-    [data-testid="stForm"] [data-testid="stWidgetLabel"] p {color:#24324B!important;font-size:14px!important;font-weight:800!important;margin-bottom:7px!important}
-    [data-testid="stForm"] [data-testid="stTextInput"] input {min-height:54px!important;height:54px!important;font-size:15px!important;border:1px solid #CBD5E1!important;border-radius:12px!important;padding:0 15px!important;background:#FBFDFF!important}
-    [data-testid="stForm"] [data-testid="stTextInput"] input:focus {border-color:#6366F1!important;box-shadow:0 0 0 4px rgba(99,102,241,.13)!important}
-    [data-testid="stForm"] button[kind="primary"],
-    [data-testid="stFormSubmitButton"] button {width:100%!important;min-height:56px!important;margin-top:13px!important;border-radius:13px!important;background:linear-gradient(105deg,#4338CA,#4F46E5 58%,#0284C7)!important;border:0!important;box-shadow:0 9px 18px rgba(79,70,229,.22)!important;color:#FFFFFF!important}
-    [data-testid="stForm"] button[kind="primary"] *,
-    [data-testid="stFormSubmitButton"] button * {color:#FFFFFF!important;font-size:16px!important;font-weight:850!important}
-    [data-testid="stFormSubmitButton"] button:disabled {opacity:.68!important;color:#FFFFFF!important}
-    .auth-switch {margin:18px 0 0;text-align:center}
-    .auth-switch button[kind="secondary"] {width:100%!important;min-height:52px!important;border:1px solid #C7D2FE!important;background:rgba(255,255,255,.72)!important;color:#4338CA!important;border-radius:13px!important;font-size:14px!important;font-weight:800!important}
-    .auth-switch button[kind="secondary"] * {color:#4338CA!important}
-    .auth-switch button[kind="secondary"]:hover {background:#EEF2FF!important;border-color:#818CF8!important}
-    [data-testid="stAlert"] {width:100%;margin:0 0 16px!important;border-radius:12px!important}
-    [data-testid="stAlert"] p {font-size:14px!important;color:#1E293B!important}
-    .auth-security-note {margin-top:19px;color:#66758C;font-size:12px;line-height:1.6;text-align:center}
-    @media (max-width:1050px) {
-      .block-container {padding:1.4rem 1.25rem 2rem!important}
-      .auth-hero {min-height:560px;padding:32px 28px}
-      .auth-panel {padding:12px 10px 12px 20px}
-      .auth-hero-title {font-size:43px}
-    }
-    @media (max-width:760px) {
-      .block-container {min-height:100vh;padding:1rem .75rem 1.5rem!important}
-      .auth-hero {min-height:auto;padding:28px 23px;border-radius:22px}
-      .auth-hero-copy {margin:38px 0 28px}
-      .auth-hero-title {font-size:39px}
-      .auth-hero-description {font-size:14px}
-      .auth-hero-featurebox {padding:17px}
-      .auth-hero-features {grid-template-columns:1fr;gap:11px}
-      .auth-panel {padding:25px 2px 10px}
-      .auth-heading {font-size:29px}
-      [data-testid="stForm"] {padding:23px 19px!important}
+    .block-container {max-width:1120px;padding:clamp(2rem,7vh,5rem) 1.25rem 3rem}
+    .auth-brand {text-align:center;margin:0 auto 22px}
+    .auth-brand-mark {display:grid;place-items:center;width:54px;height:54px;margin:0 auto 14px;border-radius:15px;background:#405069;color:#fff;font-size:20px;font-weight:800;box-shadow:0 6px 16px rgba(38,52,72,.16)}
+    .auth-brand-kicker {color:#667386;font-size:10px;font-weight:750;letter-spacing:.14em;text-transform:uppercase}
+    .auth-brand-title {margin-top:5px;color:#263448;font-size:27px;font-weight:760;letter-spacing:-.035em}
+    .auth-brand-subtitle {margin-top:5px;color:#667386;font-size:13px}
+    .auth-heading {margin:0 0 4px;color:#263448;font-size:21px;font-weight:720;letter-spacing:-.02em}
+    .auth-description {margin:0 0 18px;color:#667386;font-size:13px;line-height:1.5}
+    [data-testid="stForm"] {max-width:500px;margin:0 auto;padding:25px 27px;background:#fff;border:1px solid #E0E5EB;border-radius:14px;box-shadow:0 12px 32px rgba(38,52,72,.08)}
+    [data-testid="stForm"] [data-testid="stWidgetLabel"] p {color:#354154;font-size:13px;font-weight:650}
+    [data-testid="stForm"] [data-testid="stTextInput"] input {min-height:46px}
+    [data-testid="stForm"] button[kind="primary"] {width:100%;margin-top:7px}
+    .auth-switch {max-width:500px;margin:13px auto 0}
+    .auth-switch button[kind="secondary"] {width:100%;border:0!important;background:transparent!important;color:#405069!important}
+    .auth-switch button[kind="secondary"]:hover {background:#E9EDF2!important}
+    [data-testid="stAlert"] {max-width:500px;margin:12px auto}
+    @media (max-width: 700px) {
+        .block-container {padding:2rem .85rem}
+        .auth-brand-title {font-size:23px}
+        [data-testid="stForm"] {padding:21px 18px}
     }
     </style>
     """, unsafe_allow_html=True)
@@ -718,46 +522,30 @@ def authentication_styles():
 
 def render_auth_page():
     authentication_styles()
-    if st.session_state.pop("clear_signup_fields", False):
-        for key in ("signup_username", "signup_password", "signup_confirmation"):
-            st.session_state.pop(key, None)
-
-    page = st.session_state.get("auth_page", "login")
-    is_signup = page == "signup"
-    title = "Create your account" if is_signup else "Welcome back"
-    description = (
-        "Set up a teacher account to access the attendance workspace."
-        if is_signup else "Sign in to review classroom evidence and manage attendance decisions."
-    )
-
-    left, right = st.columns([1.08, 0.92], gap="large", vertical_alignment="center")
-    with left:
+    _, center, _ = st.columns([1, 1.25, 1])
+    with center:
+        if st.session_state.pop("clear_signup_fields", False):
+            for key in ("signup_username", "signup_password", "signup_confirmation"):
+                st.session_state.pop(key, None)
+        page = st.session_state.get("auth_page", "login")
+        is_signup = page == "signup"
+        title = "Create your account" if is_signup else "Welcome back"
+        description = (
+            "Register an account to access the attendance workspace."
+            if is_signup else "Sign in to continue to your attendance workspace."
+        )
         st.markdown(
-            '<div class="auth-hero">'
-            '<div class="auth-hero-top"><div class="auth-hero-brand">'
-            '<div class="auth-hero-mark">AI</div><div><div class="auth-hero-brandname">Attendance Intelligence</div>'
-            '<div class="auth-hero-brandmeta">Teacher workspace</div></div></div>'
-            '<div class="auth-local-pill">●&nbsp; LOCAL &amp; PRIVATE</div></div>'
-            '<div class="auth-hero-copy"><div class="auth-hero-kicker">CLASSROOM EVIDENCE, MADE CLEAR</div>'
-            '<div class="auth-hero-title">A clearer view of<br><span>every class.</span></div>'
-            '<p class="auth-hero-description">Bring classroom video, student visibility evidence and teacher review together in one focused workspace. Your decisions stay in the teacher’s hands.</p></div>'
-            '<div><div class="auth-hero-featurebox"><div class="auth-hero-featuretitle">Built for a thoughtful attendance review</div>'
-            '<div class="auth-hero-features">'
-            '<div class="auth-hero-feature"><span class="auth-hero-check">✓</span><span>Person tracking across classroom video</span></div>'
-            '<div class="auth-hero-feature"><span class="auth-hero-check">✓</span><span>Face evidence with confidence context</span></div>'
-            '<div class="auth-hero-feature"><span class="auth-hero-check">✓</span><span>Teacher-led attendance reconciliation</span></div>'
-            '<div class="auth-hero-feature"><span class="auth-hero-check">✓</span><span>Review history and audit records</span></div>'
-            '</div></div><div class="auth-hero-foot">VIDEO IS EVIDENCE — NOT AN AUTOMATED ATTENDANCE VERDICT.</div></div>'
-            '</div>',
+            '<div class="auth-brand"><div class="auth-brand-mark">AI</div>'
+            '<div class="auth-brand-kicker">Attendance workspace</div>'
+            '<div class="auth-brand-title">AI Attendance Detector</div>'
+            '<div class="auth-brand-subtitle">Teacher review · Video visibility evidence</div></div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div class="auth-heading">{title}</div><div class="auth-description">{description}</div>',
             unsafe_allow_html=True,
         )
 
-    with right:
-        st.markdown(
-            f'<div class="auth-panel"><div class="auth-panel-kicker">SECURE WORKSPACE ACCESS</div>'
-            f'<div class="auth-heading">{title}</div><div class="auth-description">{description}</div></div>',
-            unsafe_allow_html=True,
-        )
         flash_message = st.session_state.pop("auth_flash_message", None)
         if flash_message:
             st.success(flash_message)
@@ -767,15 +555,15 @@ def render_auth_page():
                 username = st.text_input("Username", placeholder="Choose a username", key="signup_username")
                 password = st.text_input("Password", placeholder="Create a password", type="password",
                                          key="signup_password")
-                confirmation = st.text_input("Confirm password", placeholder="Enter your password again",
+                confirmation = st.text_input("Confirm Password", placeholder="Re-enter your password",
                                              type="password", key="signup_confirmation")
-                submitted = st.form_submit_button("Create account  →", type="primary", use_container_width=True)
+                submitted = st.form_submit_button("Create Account", type="primary", use_container_width=True)
             if submitted:
                 try:
                     clean_username = auth.validate_registration(username, password, confirmation)
                     auth.register_user(clean_username, password)
                 except auth.UsernameExistsError:
-                    st.error("That username is already registered. Choose another username or return to sign in.")
+                    st.error("That username is already registered. Choose another username or return to Login.")
                 except ValueError as error:
                     st.error(str(error))
                 except (OSError, sqlite3.Error):
@@ -787,17 +575,18 @@ def render_auth_page():
                     st.session_state["auth_flash_message"] = "Account created. Sign in with your new credentials."
                     st.rerun()
             st.markdown('<div class="auth-switch">', unsafe_allow_html=True)
-            if st.button("←  I already have an account", key="show_login", type="secondary", use_container_width=True):
+            if st.button("Already have an account? Return to Login", key="show_login",
+                         type="secondary", use_container_width=True):
                 st.session_state["auth_page"] = "login"
                 st.rerun()
-            st.markdown('</div><div class="auth-security-note">Your local teacher account protects access to this attendance workspace.</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
             return
 
         with st.form("login_form", clear_on_submit=True):
             username = st.text_input("Username", placeholder="Enter your username", key="login_username")
             password = st.text_input("Password", placeholder="Enter your password", type="password",
                                      key="login_password")
-            submitted = st.form_submit_button("Sign in to workspace  →", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("Login", type="primary", use_container_width=True)
         if submitted:
             try:
                 valid_credentials = auth.authenticate_user(username, password)
@@ -811,10 +600,10 @@ def render_auth_page():
                     st.rerun()
                 st.error("The username or password is incorrect.")
         st.markdown('<div class="auth-switch">', unsafe_allow_html=True)
-        if st.button("New to the workspace?  Create an account", key="show_signup", type="secondary", use_container_width=True):
+        if st.button("New here? Sign Up", key="show_signup", type="secondary", use_container_width=True):
             st.session_state["auth_page"] = "signup"
             st.rerun()
-        st.markdown('</div><div class="auth-security-note">By signing in, you enter a teacher review workspace. Video visibility does not make the final attendance decision.</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def format_session(session):
@@ -963,7 +752,7 @@ def main():
     merged["video_status"] = merged.status.fillna("Not seen")
     for column, default in (("visible_percent", 0.0), ("confidence_score", 0.0),
                             ("total_visible_seconds", 0.0), ("mean_recognition_similarity", 0.0),
-                            ("face_sample_success_percent", 0.0), ("face_sample_attempts", 0),
+                            ("face_detected_visible_percent", 0.0),
                             ("mean_person_detection_confidence", 0.0), ("face_samples", 0)):
         if column not in merged:
             merged[column] = default
@@ -972,9 +761,6 @@ def main():
         if column not in merged:
             merged[column] = default
         merged[column] = merged[column].fillna(default)
-    if "face_sample_metrics_available" not in merged:
-        merged["face_sample_metrics_available"] = False
-    merged["face_sample_metrics_available"] = merged["face_sample_metrics_available"].fillna(False).astype(bool)
     merged["visible_time"] = merged.total_visible_seconds.map(format_duration)
     track_table = safe_csv(evidence_dir / "identities.csv")
     track_id_count = int(track_table.track_id.nunique()) if "track_id" in track_table else 0
@@ -1022,8 +808,6 @@ def main():
                     st.metric(label, value)
         st.caption(f"YOLO tracker produced {track_id_count} track IDs. Track IDs can split or merge and are not a headcount.")
         st.info("Not visible does not mean a student left the room. The teacher makes every attendance decision.")
-        st.caption("Confidence is an evidence-quality score, not a probability: 50% recognition similarity, "
-                   "30% usable face-sample yield, and 20% sample sufficiency. Person visibility is shown separately.")
         st.subheader("Reconciliation summary")
         preview = merged.merge(manual[["student_id", "manual_attendance"]], on="student_id", how="left")
         preview["manual_attendance"] = preview.manual_attendance.fillna("Not recorded")
@@ -1034,28 +818,31 @@ def main():
             "visible_time", "confidence_score", "confidence", "flags", "reconciliation"]])
 
     if active_section == 'Attendance review':
-        st.subheader("Mark attendance")
-        st.caption("Record the teacher's roll call directly on each student card. Selected actions are highlighted in colour.")
-        st.markdown(
-            "<div class='attendance-section-note'>Choose Present or Absent directly on each student's row. "
-            "These are the teacher's manual marks; video evidence is shown separately and never changes attendance automatically.</div>",
-            unsafe_allow_html=True,
-        )
+        st.subheader("Attendance reconciliation")
+        st.caption("Select a student and record the teacher's mark. Video evidence never sets attendance automatically.")
+        quick_student = st.selectbox("Student to mark", merged.student_id.tolist(),
+            format_func=lambda sid: f"{merged.loc[merged.student_id == sid, 'name'].iloc[0]} · {sid}",
+            key=f"quick_mark_{session['session_id']}")
+        current_manual = manual.loc[manual.student_id.astype(str) == str(quick_student), "manual_attendance"]
+        old_manual = current_manual.iloc[0] if not current_manual.empty else "Not recorded"
+        st.caption(f"Current teacher mark: **{old_manual}**")
+        mark_cols = st.columns([1, 1, 1, 4])
+        for column, value, label in ((mark_cols[0], "Present", "Mark Present"),
+                                     (mark_cols[1], "Absent", "Mark Absent"),
+                                     (mark_cols[2], "Not recorded", "Clear mark")):
+            if column.button(label, key=f"{label}_{session['session_id']}_{quick_student}",
+                              type="primary" if value != "Not recorded" else "secondary", use_container_width=True):
+                save_manual_mark(manual_path, roster, quick_student, value)
+                append_audit(report_dir, {"timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
+                    "teacher": teacher, "student_id": quick_student, "old_value": old_manual,
+                    "new_value": value, "reason": "Teacher updated manual attendance mark"})
+                st.rerun()
         review = merged.merge(manual[["student_id", "manual_attendance"]], on="student_id", how="left")
         review["manual_attendance"] = review.manual_attendance.fillna("Not recorded")
         review["reconciliation"] = review.apply(classify, axis=1)
         state = load_review_state(report_dir)
         review["review_status"] = review.student_id.map(lambda sid: state.get(str(sid), {}).get("review_status", "Pending"))
-
-        search_col, action_col = st.columns([2.2, 1])
-        with search_col:
-            search_text = st.text_input("Search students", placeholder="Search by name, student ID or roll number",
-                                        key=f"attendance_search_{session['session_id']}")
-        with action_col:
-            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-            confirm_all = st.button("✓ Confirm all matches", key=f"confirm_all_{session['session_id']}",
-                help="Confirms only rows categorized Match with a recorded manual value.", use_container_width=True)
-        if confirm_all:
+        if st.button("Confirm all matches", help="Confirms only rows categorized Match with a recorded manual value."):
             matches = review[(review.reconciliation == "Match") & review.manual_attendance.isin(["Present", "Absent"])]
             for row in matches.itertuples(index=False):
                 old = state.get(str(row.student_id), {}).get("final_attendance", "Pending")
@@ -1066,75 +853,10 @@ def main():
                     "new_value": row.manual_attendance, "reason": "Teacher confirmed match"})
             save_review_state(report_dir, state)
             st.rerun()
-
-        if search_text.strip():
-            query = search_text.strip().casefold()
-            mask = (
-                review["name"].fillna("").astype(str).str.casefold().str.contains(query, regex=False)
-                | review["student_id"].fillna("").astype(str).str.casefold().str.contains(query, regex=False)
-                | review["roll_no"].fillna("").astype(str).str.casefold().str.contains(query, regex=False)
-            )
-            review_to_show = review[mask]
-        else:
-            review_to_show = review
-
-        marked_count = int(review.manual_attendance.isin(["Present", "Absent"]).sum())
-        st.caption(f"Showing {len(review_to_show)} of {len(review)} students · {marked_count} manually marked · {len(review) - marked_count} awaiting a mark")
-        if review_to_show.empty:
-            st.info("No students match that search. Try a different name, ID or roll number.")
-        header_cols = st.columns([2.25, 1.5, 1.0, 1.2, 1.05, 1.05, .78])
-        for column, label in zip(header_cols, ["Student", "Video evidence", "Confidence", "Teacher mark", "Present", "Absent", "Clear"]):
-            column.markdown(f"<div class='eyebrow'>{label}</div>", unsafe_allow_html=True)
-
-        for row_index, row in enumerate(review_to_show.itertuples(index=False)):
-            with st.container(border=True):
-                cols = st.columns([2.25, 1.5, 1.0, 1.2, 1.05, 1.05, .78], vertical_alignment="center")
-                with cols[0]:
-                    roll_value = str(row.roll_no) if pd.notna(row.roll_no) and str(row.roll_no).strip() else "—"
-                    st.markdown(
-                        f"<div class='attendance-row-title'>{escape(str(row.name))}</div>"
-                        f"<div class='attendance-row-meta'>{escape(str(row.student_id))} · Roll {escape(roll_value)}</div>",
-                        unsafe_allow_html=True,
-                    )
-                with cols[1]:
-                    video_tone = tone(row.video_status)
-                    st.markdown(
-                        f"<span class='status-pill {video_tone}'>{escape(str(row.video_status))}</span>"
-                        f"<div class='attendance-row-meta'>{escape(str(row.visible_time))} · {float(row.visible_percent):.0f}%</div>",
-                        unsafe_allow_html=True,
-                    )
-                with cols[2]:
-                    confidence_color = "#059669" if row.confidence == "High" else "#D97706" if row.confidence == "Medium" else "#E11D48"
-                    st.markdown(
-                        f"<div style='font-size:18px;font-weight:800;color:{confidence_color}'>{float(row.confidence_score):.0f}<span style='font-size:10px;color:#64748B'>/100</span></div>"
-                        f"<div class='attendance-row-meta'>{escape(str(row.confidence))}</div>",
-                        unsafe_allow_html=True,
-                    )
-                with cols[3]:
-                    st.markdown(
-                        f"<span class='status-pill {tone(row.manual_attendance)}'>{escape(str(row.manual_attendance))}</span>"
-                        f"<div class='attendance-row-meta'>{escape(str(row.reconciliation))}</div>",
-                        unsafe_allow_html=True,
-                    )
-                button_suffix = f"{session['session_id']}_{row_index}"
-                if cols[4].button("✓ Present", key=f"mark_present_{button_suffix}",
-                                  type="primary" if row.manual_attendance == "Present" else "secondary",
-                                  use_container_width=True):
-                    update_teacher_mark(manual_path, roster, report_dir, teacher, row.student_id, "Present")
-                    st.rerun()
-                if cols[5].button("✕ Absent", key=f"mark_absent_{button_suffix}",
-                                  type="primary" if row.manual_attendance == "Absent" else "secondary",
-                                  use_container_width=True):
-                    update_teacher_mark(manual_path, roster, report_dir, teacher, row.student_id, "Absent")
-                    st.rerun()
-                if cols[6].button("Clear", key=f"mark_clear_{button_suffix}",
-                                  type="secondary", use_container_width=True,
-                                  disabled=row.manual_attendance == "Not recorded"):
-                    update_teacher_mark(manual_path, roster, report_dir, teacher, row.student_id, "Not recorded")
-                    st.rerun()
-
-                if row.review_status != "Pending":
-                    st.caption(f"Review: {row.review_status} · Final: {state.get(str(row.student_id), {}).get('final_attendance', '—') or '—'}")
+        review["visible_time"] = review.apply(
+            lambda item: f"{item.visible_time} · {item.visible_percent:.1f}%", axis=1)
+        render_reconciliation_table(review[["student_id", "name", "roll_no", "manual_attendance", "video_status",
+            "visible_time", "confidence_score", "confidence", "flags", "reconciliation", "review_status"]])
 
     if active_section == 'Student details':
         st.subheader("Student details")
@@ -1158,15 +880,9 @@ def main():
             other_flags = [flag.strip() for flag in str(row["flags"]).split(",")
                            if flag.strip() not in {"", "—", "Early last seen"}]
             st.write(", ".join(other_flags) if other_flags else ("No other flags" if row["flags"] != "—" else "No flags"))
-            st.caption(f"Recognition similarity: {row.mean_recognition_similarity:.3f} · "
-                       f"Person detector confidence: {row.mean_person_detection_confidence:.3f}")
-            if bool(row.face_sample_metrics_available):
-                st.caption(f"Usable face samples: {int(row.face_samples)} / "
-                           f"{int(row.face_sample_attempts)} selected attempts · "
-                           f"Sample yield: {row.face_sample_success_percent:.1f}%")
-            else:
-                st.warning("Attempt-level face-sampling data is unavailable for this older session. "
-                           "Rerun the video with the updated backend for the revised evidence score.")
+            st.caption(f"Identity similarity: {row.mean_recognition_similarity:.3f} · Person detector confidence: "
+                       f"{row.mean_person_detection_confidence:.3f} · Face-detected visible time: "
+                       f"{row.face_detected_visible_percent:.1f}% · Face samples: {int(row.face_samples)}")
         with detail_right:
             gauge = go.Figure(go.Indicator(mode="gauge+number", value=float(row.confidence_score),
                 number={"suffix": "/100", "font": {"color": "#263448", "size": 30}},

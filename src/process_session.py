@@ -195,11 +195,17 @@ def visibility_intervals(times, step, gap_tolerance):
 
 def detect_track_faces(video_path, tracks, fps, detector, recognizer, gallery,
                        evidence_dir, config, time_min=None, time_max=None):
+    """Sample selected person-track frames and log every face-sampling attempt.
+
+    Returns successful embeddings, successful evidence rows, and an attempt-level
+    log. Failed selected frames are retained so M3 can calculate sample yield
+    without pretending that sparse successful samples represent continuous video time.
+    """
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         raise ValueError(f"Cannot open video: {video_path}")
     evidence_dir.mkdir(parents=True, exist_ok=True)
-    samples_by_track, evidence_rows = defaultdict(list), []
+    samples_by_track, evidence_rows, attempt_rows = defaultdict(list), [], []
     grouped_tracks = list(tracks.groupby("id"))
     total_tracks = len(grouped_tracks)
     for group_index, (track_id, group) in enumerate(grouped_tracks, start=1):
@@ -211,10 +217,17 @@ def detect_track_faces(video_path, tracks, fps, detector, recognizer, gallery,
         selected = choose_track_samples(eligible, int(config["per_track_samples"]),
                                         float(config["min_sample_separation_sec"]))
         for candidate in selected:
+            attempt = {
+                "track_id": int(track_id), "t": round(float(candidate.t), 3),
+                "outcome": "failed", "failure_reason": "unknown",
+                "face_px": None, "det_score": None, "sharpness": None,
+            }
             frame_number = max(0, int(round(float(candidate.t) * fps)))
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
             ok, frame = cap.read()
             if not ok:
+                attempt["failure_reason"] = "frame_read_failed"
+                attempt_rows.append(attempt)
                 continue
             height, width = frame.shape[:2]
             bw, bh = candidate.x2 - candidate.x1, candidate.y2 - candidate.y1
@@ -224,6 +237,8 @@ def detect_track_faces(video_path, tracks, fps, detector, recognizer, gallery,
             y2 = min(height, int(candidate.y1 + 0.48 * bh))
             head = frame[y1:y2, x1:x2]
             if head.size == 0:
+                attempt["failure_reason"] = "empty_head_crop"
+                attempt_rows.append(attempt)
                 continue
             scale = 1.0
             if head.shape[1] < 200:
@@ -231,26 +246,41 @@ def detect_track_faces(video_path, tracks, fps, detector, recognizer, gallery,
                 head = cv2.resize(head, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
             faces = detect_faces(detector, head)
             if not faces:
+                attempt["failure_reason"] = "no_face_detected"
+                attempt_rows.append(attempt)
                 continue
             face = max(faces, key=lambda item: float(item[2]) * float(item[3]))
             face_px = float(face[2]) / scale
+            attempt["face_px"] = round(face_px, 1)
+            attempt["det_score"] = round(float(face[-1]), 4)
             if face_px < float(config["min_face_px"]):
+                attempt["failure_reason"] = "face_below_min_size"
+                attempt_rows.append(attempt)
                 continue
             fx, fy, fw, fh = (int(v) for v in face[:4])
             mx, my = int(0.2 * fw), int(0.2 * fh)
             crop = head[max(0, fy-my):min(head.shape[0], fy+fh+my),
                         max(0, fx-mx):min(head.shape[1], fx+fw+mx)]
             if crop.size == 0:
+                attempt["failure_reason"] = "empty_face_crop"
+                attempt_rows.append(attempt)
                 continue
             sharpness = float(cv2.Laplacian(cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY), cv2.CV_64F).var())
+            attempt["sharpness"] = round(sharpness, 2)
             if sharpness < float(config["min_sharpness"]):
+                attempt["failure_reason"] = "below_sharpness_threshold"
+                attempt_rows.append(attempt)
                 continue
             vector = embed(recognizer, head, face)
             similarities = {}
             for student_id, enrolled in gallery.items():
                 similarities[student_id] = float(np.max(enrolled @ vector))
             filename = f"track_{int(track_id):05d}_t_{float(candidate.t):09.3f}.jpg"
-            cv2.imwrite(str(evidence_dir / filename), crop)
+            image_written = cv2.imwrite(str(evidence_dir / filename), crop)
+            if not image_written:
+                attempt["failure_reason"] = "evidence_image_write_failed"
+                attempt_rows.append(attempt)
+                continue
             sample = {"t": float(candidate.t), "similarities": similarities,
                       "det_score": float(face[-1]), "sharpness": sharpness,
                       "face_px": face_px, "evidence_file": filename, "embedding": vector}
@@ -258,10 +288,14 @@ def detect_track_faces(video_path, tracks, fps, detector, recognizer, gallery,
             evidence_rows.append({"track_id": int(track_id), "t": float(candidate.t),
                 "face_px": round(face_px, 1), "det_score": round(float(face[-1]), 3),
                 "sharpness": round(sharpness, 1), "evidence_file": filename})
+            attempt.update({"outcome": "usable_face_sample", "failure_reason": "",
+                            "face_px": round(face_px, 1), "det_score": round(float(face[-1]), 4),
+                            "sharpness": round(sharpness, 2)})
+            attempt_rows.append(attempt)
         if group_index == 1 or group_index % 5 == 0 or group_index == total_tracks:
             print(f"face sampling: tracks {group_index}/{total_tracks}", flush=True)
     cap.release()
-    return samples_by_track, evidence_rows
+    return samples_by_track, evidence_rows, attempt_rows
 
 
 def run_tracking(args, config, run_dir):
@@ -331,7 +365,7 @@ def build_demo_gallery(database, samples_by_track, duration_sec, enrollment_frac
     return cutoff, len(roster_rows)
 
 
-def export_results(run_dir, tracks, meta, samples_by_track, evidence_rows, gallery, config, demo=False):
+def export_results(run_dir, tracks, meta, samples_by_track, evidence_rows, attempt_rows, gallery, config, demo=False):
     identities = []
     for track_id, group in tracks.groupby("id"):
         tmin, tmax = float(group.t.min()), float(group.t.max())
@@ -385,7 +419,9 @@ def export_results(run_dir, tracks, meta, samples_by_track, evidence_rows, galle
     pd.DataFrame([row for row in identities if row["student_id"] is None]).to_csv(run_dir / "unknown_tracks.csv", index=False)
     pd.DataFrame(conflicts, columns=["student_id", "kept_track_id", "unknown_track_id", "kept_confidence",
         "rejected_confidence", "overlap_start_sec", "overlap_end_sec"]).to_csv(run_dir / "conflicts.csv", index=False)
-    pd.DataFrame(evidence_rows).to_csv(run_dir / "face_samples.csv", index=False)
+    pd.DataFrame(evidence_rows, columns=["track_id", "t", "face_px", "det_score", "sharpness", "evidence_file"]).to_csv(run_dir / "face_samples.csv", index=False)
+    pd.DataFrame(attempt_rows, columns=["track_id", "t", "outcome", "failure_reason", "face_px", "det_score", "sharpness"]).to_csv(
+        run_dir / "face_sample_attempts.csv", index=False)
     pd.DataFrame(identity_merges, columns=["student_id", "from_track_id", "to_track_id", "gap_sec"]).to_csv(
         run_dir / "identity_merges.csv", index=False)
     # Stable input shape for the later presence report: one row per identified observation.
@@ -454,22 +490,22 @@ def main():
     if args.demo:
         cutoff = float(meta.get("duration", 0)) * 0.30
         print("DEMO enrollment pass: sampling the first 30% of the video", flush=True)
-        early_samples, _ = detect_track_faces(args.video, tracks, float(meta.get("fps", 25)),
+        early_samples, _early_evidence, _early_attempts = detect_track_faces(args.video, tracks, float(meta.get("fps", 25)),
             detector, recognizer, {}, run_dir / "face_evidence", config, time_max=cutoff)
         demo_database = run_dir / "demo_gallery.db"
         cutoff, demo_count = build_demo_gallery(demo_database, early_samples, float(meta.get("duration", 0)))
         gallery = load_gallery(demo_database)
         print("DEMO recognition pass: sampling the remaining video", flush=True)
-        samples, evidence = detect_track_faces(args.video, tracks, float(meta.get("fps", 25)),
+        samples, evidence, attempts = detect_track_faces(args.video, tracks, float(meta.get("fps", 25)),
             detector, recognizer, gallery, run_dir / "face_evidence", config, time_min=cutoff)
         print(f"DEMO: {demo_count} temporary identities enrolled from the first 30%; "
               "same-video enrolment, not an accuracy evaluation")
     else:
         gallery = load_gallery(args.db)
         print("Face sampling and recognition", flush=True)
-        samples, evidence = detect_track_faces(args.video, tracks, float(meta.get("fps", 25)),
+        samples, evidence, attempts = detect_track_faces(args.video, tracks, float(meta.get("fps", 25)),
             detector, recognizer, gallery, run_dir / "face_evidence", config)
-    export_results(run_dir, tracks, meta, samples, evidence, gallery, config, demo=args.demo)
+    export_results(run_dir, tracks, meta, samples, evidence, attempts, gallery, config, demo=args.demo)
 
 
 if __name__ == "__main__":

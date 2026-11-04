@@ -1,4 +1,4 @@
-# Byte-compiled / optimized / DLL files
+﻿# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
 *$py.class
@@ -236,3 +236,7 @@ models/
 *.onnx
 *.mov
 *.mkv
+
+/videos/*
+!/videos/.gitkeep
+

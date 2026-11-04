@@ -21,24 +21,7 @@ def update_input(app, key, value):
 
 
 def click_button(app, key):
-    """Click a regular keyed Streamlit button."""
     app.button(key=key).click().run()
-    assert not app.exception, [str(item.value) for item in app.exception]
-
-
-def click_submit_button(app, label):
-    """Click a form submit button by its visible label, not its generated key.
-
-    Streamlit generates internal form-submit keys from the form ID and label.
-    Looking up those generated keys is brittle when labels are restyled.
-    AppTest exposes form submit buttons directly through app.form_submit_button.
-    """
-    matches = [button for button in app.form_submit_button if button.label == label]
-    assert len(matches) == 1, (
-        f"Expected exactly one form submit button labelled {label!r}; "
-        f"found {[button.label for button in app.form_submit_button]!r}"
-    )
-    matches[0].click().run()
     assert not app.exception, [str(item.value) for item in app.exception]
 
 
@@ -52,37 +35,37 @@ def check_dashboard_auth_flow(database_path):
     assert app.text_input(key="login_password").proto.type == 1
 
     click_button(app, "show_signup")
-    click_submit_button(app, "Create account  →")
+    click_button(app, "FormSubmitter:signup_form-Create Account")
     assert "Username cannot be empty." in app.error[0].value
     assert not app.sidebar.radio
 
     update_input(app, "signup_username", "teacher.one")
-    click_submit_button(app, "Create account  →")
+    click_button(app, "FormSubmitter:signup_form-Create Account")
     assert "Password cannot be empty." in app.error[0].value
 
     update_input(app, "signup_password", "correct horse")
     update_input(app, "signup_confirmation", "different")
-    click_submit_button(app, "Create account  →")
+    click_button(app, "FormSubmitter:signup_form-Create Account")
     assert "Passwords do not match." in app.error[0].value
 
     update_input(app, "signup_confirmation", "correct horse")
-    click_submit_button(app, "Create account  →")
+    click_button(app, "FormSubmitter:signup_form-Create Account")
     assert "Account created." in app.success[0].value
     click_button(app, "show_signup")
     update_input(app, "signup_username", "TEACHER.ONE")
     update_input(app, "signup_password", "another password")
     update_input(app, "signup_confirmation", "another password")
-    click_submit_button(app, "Create account  →")
+    click_button(app, "FormSubmitter:signup_form-Create Account")
     assert "already registered" in app.error[0].value
 
     click_button(app, "show_login")
     update_input(app, "login_username", "teacher.one")
     update_input(app, "login_password", "wrong password")
-    click_submit_button(app, "Sign in to workspace  →")
+    click_button(app, "FormSubmitter:login_form-Login")
     assert "username or password is incorrect" in app.error[0].value
     update_input(app, "login_username", "teacher.one")
     update_input(app, "login_password", "correct horse")
-    click_submit_button(app, "Sign in to workspace  →")
+    click_button(app, "FormSubmitter:login_form-Login")
     assert app.session_state["authenticated_user"] == "teacher.one"
     assert app.button(key="logout")
     assert app.sidebar.radio

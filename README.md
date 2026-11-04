@@ -1,4 +1,4 @@
-# AI Attendance Anomaly Detector
+﻿# AI Attendance Anomaly Detector
 
 A local college demo for reviewing classroom visibility evidence alongside teacher-recorded attendance. The system processes a selected classroom video, estimates student identity and visible time, reports confidence and visibility anomalies, and presents the results for teacher review.
 
@@ -50,11 +50,9 @@ For example, if the project is at `E:\zsp_project\ai-attendance-detector`, the m
 
 ## Run the temporary video demo
 
-Put a classroom video in a private local folder outside the repository. Set that folder for the dashboard, then launch Streamlit from the project root:
+Put test videos in the project-root `videos` folder (alongside `src`), then launch Streamlit from the project root:
 
 ```powershell
-$env:ATTENDANCE_VIDEO_DIR = 'E:\zsp_project\attendance-data'
-Set-Location E:\zsp_project\ai-attendance-detector
 .\venv\Scripts\python.exe -m streamlit run src\dashboard.py
 ```
 
@@ -69,7 +67,7 @@ In the dashboard:
 
 The app runs tracking/identity processing (M2), then presence/report generation (M3). Demo reports, evidence crops, temporary identities, and sample roll-call marks stay under `output\demo_sessions\` and are not real enrollment records. Processing can take a while, especially on the first run while YOLO weights are downloaded. The default profile is YOLO11s at 960 px on every second frame; this balances speed and coverage but can miss some small or distant people.
 
-The dashboard can also accept a different local video folder. Set `ATTENDANCE_VIDEO_DIR` before launching; the teacher UI displays video names, not local filesystem paths.
+The dashboard defaults to the project-root `videos` folder. The **Test video folder** field can point elsewhere. It scans the folder top level only and supports `.mp4`, `.avi`, `.mov`, and `.mkv`. Set `ATTENDANCE_VIDEO_DIR` before launch to override the default. The teacher UI displays video names, not local filesystem paths.
 
 ## Optional: private real enrollment
 
@@ -124,12 +122,12 @@ The authentication check creates a disposable synthetic account database and use
 The M3 confidence score is:
 
 ```text
-100 × (0.50 × mean recognition similarity
-     + 0.30 × fraction of visible time with a detectable face
-     + 0.20 × min(face sample count / 5, 1))
+100 Ã— (0.50 Ã— mean recognition similarity
+     + 0.30 Ã— fraction of visible time with a detectable face
+     + 0.20 Ã— min(face sample count / 5, 1))
 ```
 
-Inputs are clamped to 0–1. Confidence labels are High at 75+, Medium at 55–74.9, and Low below 55. This score describes evidence quality; it is not a guarantee of identity correctness.
+Inputs are clamped to 0â€“1. Confidence labels are High at 75+, Medium at 55â€“74.9, and Low below 55. This score describes evidence quality; it is not a guarantee of identity correctness.
 
 ## Privacy and GitHub checklist
 
@@ -153,8 +151,11 @@ If private files were committed previously, adding them to `.gitignore` does not
 ## How it works
 
 ```text
-Classroom video → YOLO person tracking → YuNet face detection → SFace embeddings
-                → M2 identities → M3 visibility/confidence/flags → teacher review
+Classroom video â†’ YOLO person tracking â†’ YuNet face detection â†’ SFace embeddings
+                â†’ M2 identities â†’ M3 visibility/confidence/flags â†’ teacher review
 ```
 
 CSV and JSON reports are internal processing artifacts. The teacher works from the dashboard. Visibility intervals, gaps, and early last-seen flags are evidence for review and do not prove entry, exit, or absence.
+
+
+

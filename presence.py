@@ -1,11 +1,10 @@
 """Generate per-student presence reports from M2's presence_input.csv.
 
-Confidence formula (0–100): 50% * mean recognition similarity + 30% *
-usable face-sample yield + 20% * sample adequacy. Yield is successful usable
-face samples divided by all selected face-sampling attempts. It is NOT an
-estimate of continuous face visibility over the video. Sample adequacy is
-min(face_samples / 5, 1). The formula describes evidence quality, not an
-attendance decision or a calibrated probability of identity correctness.
+Confidence formula (0–100): 50% * mean recognition similarity + 30% * the
+percentage of visible sampled time with a detectable face + 20% * sample
+adequacy. Sample adequacy is min(face_samples / 5, 1). Each input component
+is clamped to 0–1. The formula describes evidence quality; it is not an
+attendance decision.
 """
 import argparse
 import json
@@ -135,29 +134,16 @@ def make_intervals(times, step_sec, duration_sec, gap_tol_sec):
     return intervals
 
 
-def _extract_sample_metrics(student_id, observations, face_samples, identities,
-                            face_attempts, step_sec):
-    """Return usable samples, their similarities, and attempt-level sample yield.
-
-    M2 samples only a small number of selected frames per track. Those isolated
-    samples cannot be treated as continuous face-visible seconds. New M2 runs
-    therefore write face_sample_attempts.csv, including failed selected frames.
-    """
-    if identities is None or not {"track_id", "student_id"}.issubset(identities.columns):
-        # Step-A synthetic observations are already sample-like records. In this
-        # legacy/synthetic path each observation is one attempt.
+def _extract_sample_metrics(student_id, observations, face_samples, identities, step_sec):
+    """Use M2 sidecars to count extracted crops and estimate per-crop similarity."""
+    if face_samples is None or identities is None or not {"track_id", "student_id"}.issubset(identities.columns):
         selected = observations[observations.face_detected > 0].drop_duplicates("t")
         sims = pd.to_numeric(selected.get("similarity", pd.Series(dtype=float)), errors="coerce").dropna()
-        attempts_count = int(observations.drop_duplicates("t").shape[0])
-        successful_count = int(len(selected))
-        success_pct = 100.0 * successful_count / attempts_count if attempts_count else 0.0
-        return successful_count, sims.tolist(), attempts_count, success_pct, True
-
-    track_ids = identities.loc[identities.student_id.astype(str) == str(student_id), "track_id"].astype(str).tolist()
-    if not track_ids:
-        return 0, [], 0, 0.0, face_attempts is not None
-
-    crops = face_samples[face_samples.track_id.astype(str).isin(track_ids)] if face_samples is not None and not face_samples.empty else pd.DataFrame()
+        return int(len(selected)), sims.tolist()
+    track_ids = identities.loc[identities.student_id == student_id, "track_id"].astype(str).tolist()
+    if not track_ids or face_samples.empty:
+        return 0, []
+    crops = face_samples[face_samples.track_id.astype(str).isin(track_ids)]
     similarities = []
     for crop in crops.itertuples(index=False):
         same_track = observations[observations.track_id.astype(str) == str(crop.track_id)]
@@ -169,25 +155,11 @@ def _extract_sample_metrics(student_id, observations, face_samples, identities,
             value = pd.to_numeric(pd.Series([same_track.loc[nearest_index, "similarity"]]), errors="coerce").iloc[0]
             if pd.notna(value):
                 similarities.append(float(value))
-
-    if face_attempts is None:
-        # Legacy M2 output did not save failed sampling attempts. Do not pretend
-        # that successful crops describe face coverage or sample yield.
-        return int(len(crops)), similarities, 0, 0.0, False
-
-    attempts = face_attempts[face_attempts.track_id.astype(str).isin(track_ids)] if not face_attempts.empty else pd.DataFrame()
-    attempts_count = int(len(attempts))
-    if attempts_count and "outcome" in attempts:
-        successful_count = int((attempts.outcome == "usable_face_sample").sum())
-    else:
-        successful_count = 0
-    success_pct = 100.0 * successful_count / attempts_count if attempts_count else 0.0
-    return int(len(crops)), similarities, attempts_count, success_pct, True
+    return int(len(crops)), similarities
 
 
 def build_presence(students, observations, duration_sec, step_sec, config=None,
-                   scheduled=False, clock_anchor=None, face_samples=None, identities=None,
-                   face_attempts=None):
+                   scheduled=False, clock_anchor=None, face_samples=None, identities=None):
     """Return report rows and a per-student timeline mapping."""
     cfg = {**DEFAULTS, **(config or {})}
     required = {"student_id", "t"}
@@ -220,17 +192,19 @@ def build_presence(students, observations, duration_sec, step_sec, config=None,
         gap_count = len(gaps)
         longest_gap = max(gaps, default=0.0)
 
-        (samples_count, sample_similarities, sample_attempts,
-         sample_success_pct, sample_metrics_available) = _extract_sample_metrics(
-            sid, seen, face_samples, identities, face_attempts, step_sec)
+        samples_count, sample_similarities = _extract_sample_metrics(
+            sid, seen, face_samples, identities, step_sec)
         if sample_similarities:
             mean_similarity = sum(sample_similarities) / len(sample_similarities)
         else:
             detected = seen[seen.face_detected > 0].drop_duplicates("t")
             similarity_values = pd.to_numeric(detected.similarity, errors="coerce").dropna()
             mean_similarity = float(similarity_values.mean()) if len(similarity_values) else 0.0
-            if samples_count == 0 and identities is None:
+            if samples_count == 0:
                 samples_count = len(detected)
+        face_observation_count = int(seen.face_detected.gt(0).sum())
+        estimated_face_seconds = min(total_visible, face_observation_count * step_sec)
+        face_visible_pct = 100 * estimated_face_seconds / total_visible if total_visible > 0 else 0.0
         mean_person_detection = 0.0
         if (identities is not None and
                 {"track_id", "student_id", "mean_person_detection_confidence"}.issubset(identities.columns)):
@@ -240,10 +214,10 @@ def build_presence(students, observations, duration_sec, step_sec, config=None,
                 mean_person_detection = float(values.mean())
 
         sim_component = min(1.0, max(0.0, mean_similarity))
-        sample_yield_component = min(1.0, max(0.0, sample_success_pct / 100.0))
+        face_component = min(1.0, max(0.0, face_visible_pct / 100))
         sample_target = max(1, int(cfg["confidence_sample_target"]))
         sample_component = min(1.0, samples_count / sample_target)
-        score = round(100 * (0.50 * sim_component + 0.30 * sample_yield_component + 0.20 * sample_component), 1)
+        score = round(100 * (0.50 * sim_component + 0.30 * face_component + 0.20 * sample_component), 1)
         if score >= float(cfg["high_confidence_score"]):
             confidence = "High"
         elif score >= float(cfg["medium_confidence_score"]):
@@ -282,9 +256,7 @@ def build_presence(students, observations, duration_sec, step_sec, config=None,
             "visibility_intervals": json.dumps(intervals), "gap_count": gap_count,
             "longest_gap_seconds": round(longest_gap, 2),
             "mean_recognition_similarity": round(mean_similarity, 4),
-            "face_sample_attempts": int(sample_attempts),
-            "face_sample_success_percent": round(sample_success_pct, 2),
-            "face_sample_metrics_available": bool(sample_metrics_available),
+            "face_detected_visible_percent": round(face_visible_pct, 2),
             "mean_person_detection_confidence": round(mean_person_detection, 4),
             "face_samples": int(samples_count), "confidence_score": score,
             "confidence": confidence, "status": status, "flags": ", ".join(flags) if flags else "—",
@@ -299,9 +271,7 @@ def build_presence(students, observations, duration_sec, step_sec, config=None,
             "gap_count": gap_count, "longest_gap_seconds": round(longest_gap, 2),
             "confidence_components": {
                 "mean_recognition_similarity": round(mean_similarity, 4),
-                "face_sample_attempts": int(sample_attempts),
-                "face_sample_success_percent": round(sample_success_pct, 2),
-                "face_sample_metrics_available": bool(sample_metrics_available),
+                "face_detected_visible_percent": round(face_visible_pct, 2),
                 "mean_person_detection_confidence": round(mean_person_detection, 4),
                 "face_samples": int(samples_count),
             },
@@ -320,9 +290,8 @@ def write_summary(report, destination, duration_sec, time_basis, demo=False):
         "A person may be occluded or not detectable. An early last-seen flag means visibility stopped before "
         "the video ended; it does not confirm departure. This report does not decide attendance.**", "",
         "## Confidence formula", "",
-        "Score = 100 × (0.50 × mean recognition similarity + 0.30 × usable face-sample yield "
-        "+ 0.20 × min(successful face samples / 5, 1)). Usable sample yield is usable face samples "
-        "divided by selected face-sampling attempts; it is not continuous face visibility over the video. "
+        "Score = 100 × (0.50 × mean recognition similarity + 0.30 × detectable-face visible-time fraction "
+        "+ 0.20 × min(face samples / 5, 1)). Inputs are clamped to 0–1. "
         "High ≥ 75, Medium ≥ 55, Low < 55. These are evidence-quality labels, not identity guarantees.", "",
         "## Students", "",
     ]
@@ -333,8 +302,6 @@ def write_summary(report, destination, duration_sec, time_basis, demo=False):
             f"- First seen: {row['first_seen'] or 'Not seen'}; last seen: {row['last_seen'] or 'Not seen'}",
             f"- Visible: {row['total_visible_seconds']:.1f} sec ({row['visible_percent']:.1f}% of session)",
             f"- Gaps: {row['gap_count']}; longest gap: {row['longest_gap_seconds']:.1f} sec",
-            f"- Face sampling: {row.get('face_samples', 0)} usable of {row.get('face_sample_attempts', 0)} attempts "
-            f"({row.get('face_sample_success_percent', 0):.1f}% yield)",
             f"- Confidence: {row['confidence']} ({row['confidence_score']:.1f}/100); flags: {row['flags']}", "",
         ])
     Path(destination).write_text("\n".join(lines), encoding="utf-8")
@@ -359,14 +326,11 @@ def generate_report(input_dir, output_dir, database=None, students_csv=None,
     meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path and Path(meta_path).is_file() else {}
     step_sec = float(meta.get("step", 5.0))
     config = load_config(config_path)
-    face_samples_path = folder / "face_samples.csv"
-    identities_path = folder / "identities.csv"
-    attempts_path = folder / "face_sample_attempts.csv"
+    face_samples_path, identities_path = folder / "face_samples.csv", folder / "identities.csv"
     face_samples = read_optional_csv(face_samples_path)
     identities = read_optional_csv(identities_path)
-    face_attempts = read_optional_csv(attempts_path)
     report, timelines = build_presence(students, observations, duration_sec, step_sec, config,
-        scheduled, clock_anchor, face_samples, identities, face_attempts)
+        scheduled, clock_anchor, face_samples, identities)
     if demo:
         label = "DEMO: same-video enrollment; not an accuracy evaluation"
         report["demo_mode"] = True
